@@ -1,13 +1,18 @@
 const std = @import("std");
 const rl = @import("raylib");
-const app = @import("application.zig");
-const PlatformAgnosticAllocator = @import("paa.zig");
+const entt = @import("entt");
+
+const Paa = @import("paa.zig");
+const Application = @import("application.zig").Application;
+const State = @import("state.zig").State;
+const comp = @import("components.zig");
+const systems = @import("systems.zig");
 
 pub fn main() !void {
-    var paa = PlatformAgnosticAllocator.init();
+    var paa = Paa.init();
     defer paa.deinit();
 
-    var application = app.Application.init(
+    var app = Application.init(
         paa.allocator(),
         .{
             .title = "zig-pacman",
@@ -19,20 +24,51 @@ pub fn main() !void {
             },
         },
     );
-    defer application.deinit();
+    defer app.deinit();
 
-    application.start();
-    defer application.stop();
+    var reg = entt.Registry.init(paa.allocator());
+    defer reg.deinit();
 
-    while (application.isRunning()) {
-        if (rl.windowShouldClose() or
-            rl.isKeyPressed(rl.KeyboardKey.key_escape) or
-            rl.isKeyPressed(rl.KeyboardKey.key_q))
-        {
-            application.shutdown();
+    var state = State.init(&app, &reg);
+
+    state.app.start();
+    defer state.app.stop();
+
+    _ = spawnEntity(&state);
+
+    while (state.app.isRunning()) {
+        handleAppInput(&state);
+
+        systems.beginFrame();
+        systems.renderEntities(state.reg);
+        if (state.app.debug_mode) {
+            systems.renderDebug(state.reg);
         }
+        systems.endFrame();
+    }
+}
 
-        rl.beginDrawing();
-        rl.endDrawing();
+fn spawnEntity(state: *State) entt.Entity {
+    var reg = state.reg;
+    const e = reg.create();
+    reg.add(e, comp.Position{
+        .x = state.config.getDisplayWidth() / 2 - 50,
+        .y = state.config.getDisplayHeight() / 2 - 50,
+    });
+    reg.add(e, comp.Shape.rectangle(100, 100));
+    reg.add(e, comp.Visual.stub());
+    return e;
+}
+
+fn handleAppInput(state: *State) void {
+    if (rl.windowShouldClose() or
+        rl.isKeyPressed(rl.KeyboardKey.key_escape) or
+        rl.isKeyPressed(rl.KeyboardKey.key_q))
+    {
+        state.app.shutdown();
+    }
+
+    if (rl.isKeyPressed(rl.KeyboardKey.key_f1)) {
+        state.app.toggleDebugMode();
     }
 }

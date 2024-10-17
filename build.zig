@@ -7,6 +7,8 @@ pub fn build(b: *std.Build) void {
     };
 
     // Dependencies
+    const zalgebra_dep = b.dependency("zalgebra", options);
+    const entt_dep = b.dependency("entt", options);
     const raylib_dep = b.dependency("raylib-zig", options);
 
     const exe = b.addExecutable(.{
@@ -19,6 +21,8 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     // Add dependencies to the executable.
+    exe.root_module.addImport("zalgebra", zalgebra_dep.module("zalgebra"));
+    exe.root_module.addImport("entt", entt_dep.module("zig-ecs"));
     exe.root_module.addImport("raylib", raylib_dep.module("raylib"));
     exe.linkLibrary(raylib_dep.artifact("raylib"));
 

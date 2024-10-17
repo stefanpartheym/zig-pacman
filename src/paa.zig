@@ -1,3 +1,4 @@
+//! paa - Platform agnostic allocator
 //! Agnostic allocator frontend, that chooses the appropriate allocator backend
 //! based on the host platform.
 //! The `GeneralPurposeAllocator` will cause OOM errors for web builds. In such
