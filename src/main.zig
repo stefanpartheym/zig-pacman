@@ -2,6 +2,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const entt = @import("entt");
 
+const m = @import("math");
 const Paa = @import("paa.zig");
 const Application = @import("application.zig").Application;
 const State = @import("state.zig").State;

@@ -1,7 +1,9 @@
 const rl = @import("raylib");
 
-const sprites = @import("graphics/sprites.zig");
-const Rect = @import("math.zig").Rect;
+const m = @import("math");
+const sprites = @import("graphics").sprites;
+const Rect = m.Rect;
+const Vec2 = m.Vec2;
 
 pub const Position = struct {
     x: f32,
@@ -27,10 +29,8 @@ pub const ShapeType = enum {
 
 pub const Shape = union(ShapeType) {
     const Self = @This();
-    const Vec2 = @Vector(2, f32);
 
     triangle: struct {
-        // TODO: Use Vec2 from zalgebra.
         v1: Vec2,
         v2: Vec2,
         v3: Vec2,
@@ -70,7 +70,7 @@ pub const Shape = union(ShapeType) {
 
     pub fn getWidth(self: *const Self) f32 {
         switch (self.*) {
-            .triangle => return self.getTriangleVectorLength(0),
+            .triangle => return self.getTriangleVectorLength().x(),
             .rectangle => return self.rectangle.width,
             .circle => return self.circle.radius * 2,
         }
@@ -78,18 +78,17 @@ pub const Shape = union(ShapeType) {
 
     pub fn getHeight(self: *const Self) f32 {
         switch (self.*) {
-            .triangle => return self.getTriangleVectorLength(1),
+            .triangle => return self.getTriangleVectorLength().y(),
             .rectangle => return self.rectangle.height,
             .circle => return self.circle.radius * 2,
         }
     }
 
-    fn getTriangleVectorLength(self: *const Self, dimension: u8) f32 {
+    fn getTriangleVectorLength(self: *const Self) Vec2 {
         const v1 = self.triangle.v1;
         const v2 = self.triangle.v2;
         const v3 = self.triangle.v3;
-        return @max(@max(v1[dimension], v2[dimension]), v3[dimension]) -
-            @min(@min(v1[dimension], v2[dimension]), v3[dimension]);
+        return m.Vec2.max(m.Vec2.max(v1, v2), v3);
     }
 };
 

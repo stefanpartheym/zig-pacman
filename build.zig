@@ -8,8 +8,15 @@ pub fn build(b: *std.Build) void {
 
     // Dependencies
     const zalgebra_dep = b.dependency("zalgebra", options);
+    const zalgebra_mod = zalgebra_dep.module("zalgebra");
     const entt_dep = b.dependency("entt", options);
     const raylib_dep = b.dependency("raylib-zig", options);
+
+    // Internal Modules
+    const math_mod = b.createModule(.{ .root_source_file = b.path("src/math/main.zig") });
+    math_mod.addImport("zalgebra", zalgebra_mod);
+    const graphics_mod = b.createModule(.{ .root_source_file = b.path("src/graphics/main.zig") });
+    graphics_mod.addImport("math", math_mod);
 
     const exe = b.addExecutable(.{
         .name = "zig-pacman",
@@ -21,7 +28,11 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     // Add dependencies to the executable.
-    exe.root_module.addImport("zalgebra", zalgebra_dep.module("zalgebra"));
+    exe.root_module.addImport("math", math_mod);
+    exe.root_module.addImport("graphics", graphics_mod);
+    // HACK: Add `zalgebra` module to executable explicitly for zls to provide
+    // code completion for zalgebra.
+    exe.root_module.addImport("zalgebra", zalgebra_mod);
     exe.root_module.addImport("entt", entt_dep.module("zig-ecs"));
     exe.root_module.addImport("raylib", raylib_dep.module("raylib"));
     exe.linkLibrary(raylib_dep.artifact("raylib"));

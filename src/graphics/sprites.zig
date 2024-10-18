@@ -6,9 +6,9 @@
 //! modifications (like using the `Vec2` struct from `zalgebra`).
 
 const std = @import("std");
-const za = @import("zalgebra");
+const m = @import("math");
 
-const Vec2 = za.Vec2;
+const Vec2 = m.Vec2;
 const AnimationHashMap = std.StringHashMap(SpriteAnimation);
 
 /// Keeps track of a sub region of a texture

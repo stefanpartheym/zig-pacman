@@ -2,7 +2,7 @@ const rl = @import("raylib");
 const entt = @import("entt");
 
 const comp = @import("components.zig");
-const Rect = @import("math.zig").Rect;
+const Rect = @import("math").Rect;
 
 pub fn beginFrame() void {
     rl.beginDrawing();
@@ -134,16 +134,16 @@ fn renderShape(pos: comp.Position, shape: comp.Shape, color: rl.Color, outline: 
     switch (shape) {
         .triangle => {
             const v1 = .{
-                .x = p.x + shape.triangle.v1[0],
-                .y = p.y + shape.triangle.v1[1],
+                .x = p.x + shape.triangle.v1.x(),
+                .y = p.y + shape.triangle.v1.y(),
             };
             const v2 = .{
-                .x = p.x + shape.triangle.v2[0],
-                .y = p.y + shape.triangle.v2[1],
+                .x = p.x + shape.triangle.v2.x(),
+                .y = p.y + shape.triangle.v2.y(),
             };
             const v3 = .{
-                .x = p.x + shape.triangle.v3[0],
-                .y = p.y + shape.triangle.v3[1],
+                .x = p.x + shape.triangle.v3.x(),
+                .y = p.y + shape.triangle.v3.y(),
             };
             if (outline) {
                 rl.drawTriangleLines(v1, v2, v3, color);
