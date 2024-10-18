@@ -7,6 +7,7 @@ const Application = @import("application.zig").Application;
 const State = @import("state.zig").State;
 const comp = @import("components.zig");
 const systems = @import("systems.zig");
+const entities = @import("entities.zig");
 
 pub fn main() !void {
     var paa = Paa.init();
@@ -49,15 +50,15 @@ pub fn main() !void {
 }
 
 fn spawnEntity(state: *State) entt.Entity {
-    var reg = state.reg;
-    const e = reg.create();
-    reg.add(e, comp.Position{
-        .x = state.config.getDisplayWidth() / 2 - 50,
-        .y = state.config.getDisplayHeight() / 2 - 50,
-    });
-    reg.add(e, comp.Shape.rectangle(100, 100));
-    reg.add(e, comp.Visual.stub());
-    return e;
+    return entities.createRenderable(
+        state.reg,
+        comp.Position{
+            .x = state.config.getDisplayWidth() / 2 - 50,
+            .y = state.config.getDisplayHeight() / 2 - 50,
+        },
+        comp.Shape.rectangle(100, 100),
+        comp.Visual.stub(),
+    );
 }
 
 fn handleAppInput(state: *State) void {
