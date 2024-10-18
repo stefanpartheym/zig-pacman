@@ -4,6 +4,31 @@ const entt = @import("entt");
 const comp = @import("components.zig");
 const Rect = @import("math").Rect;
 
+pub fn updateLifetimes(reg: *entt.Registry) void {
+    const delta_time = rl.getFrameTime();
+    var view = reg.view(.{comp.Lifetime}, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        var lifetime = view.get(entity);
+        lifetime.update(delta_time);
+        if (lifetime.dead()) {
+            reg.destroy(entity);
+        }
+    }
+}
+
+pub fn updateAnimations(reg: *entt.Registry) void {
+    const delta_time = rl.getFrameTime();
+    var view = reg.view(.{comp.Visual}, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        var visual = view.get(entity);
+        if (visual.* == .animation) {
+            visual.animation.playing_animation.tick(delta_time);
+        }
+    }
+}
+
 pub fn beginFrame() void {
     rl.beginDrawing();
     rl.clearBackground(rl.Color.black);
