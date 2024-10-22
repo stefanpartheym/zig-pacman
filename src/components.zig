@@ -5,9 +5,26 @@ const sprites = @import("graphics").sprites;
 const Rect = m.Rect;
 const Vec2 = m.Vec2;
 
+//------------------------------------------------------------------------------
+// Common components
+//------------------------------------------------------------------------------
+
 pub const Position = struct {
+    const Self = @This();
+
     x: f32,
     y: f32,
+
+    pub fn new(x: f32, y: f32) Self {
+        return Self{
+            .x = x,
+            .y = y,
+        };
+    }
+
+    pub fn zero() Self {
+        return Self.new(0, 0);
+    }
 };
 
 pub const Speed = struct {
@@ -18,6 +35,45 @@ pub const Speed = struct {
 
     pub fn uniform(value: f32) Self {
         return Self{ .x = value, .y = value };
+    }
+};
+
+pub const Direction = enum {
+    const Self = @This();
+
+    up,
+    down,
+    left,
+    right,
+
+    pub fn toVec2(self: Self) m.Vec2 {
+        return switch (self) {
+            // NOTE:
+            // Direction `up` and `down` return their counterpart.
+            // `Vec2` uses a cartesian coordinate system (y axis grows up) and
+            // we are using a raster coordinate system (y axis grows down).
+            // Therfore, `up` and `down` must be flipped.
+            .up => m.Vec2.down(),
+            .down => m.Vec2.up(),
+            .left => m.Vec2.left(),
+            .right => m.Vec2.right(),
+        };
+    }
+};
+
+pub const Movement = struct {
+    const Self = @This();
+
+    direction: Direction,
+    previous_direction: Direction,
+    next_direction: Direction,
+
+    pub fn new(direction: Direction) Self {
+        return Self{
+            .direction = direction,
+            .next_direction = direction,
+            .previous_direction = direction,
+        };
     }
 };
 
@@ -162,13 +218,6 @@ pub const Visual = union(VisualType) {
     }
 };
 
-pub const Direction = enum {
-    up,
-    down,
-    left,
-    right,
-};
-
 pub const Lifetime = struct {
     const Self = @This();
 
@@ -210,5 +259,23 @@ pub const Cooldown = struct {
 
     pub fn ready(self: *const Self) bool {
         return self.state == 0;
+    }
+};
+
+//------------------------------------------------------------------------------
+// Game specific components
+//------------------------------------------------------------------------------
+
+pub const GridPosition = struct {
+    const Self = @This();
+
+    x: i32,
+    y: i32,
+
+    pub fn new(x: i32, y: i32) Self {
+        return Self{
+            .x = x,
+            .y = y,
+        };
     }
 };

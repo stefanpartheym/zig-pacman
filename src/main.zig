@@ -6,6 +6,7 @@ const m = @import("math");
 const Paa = @import("paa.zig");
 const Application = @import("application.zig").Application;
 const State = @import("state.zig").State;
+const Map = @import("map.zig").Map;
 const comp = @import("components.zig");
 const systems = @import("systems.zig");
 const entities = @import("entities.zig");
@@ -31,17 +32,36 @@ pub fn main() !void {
     var reg = entt.Registry.init(paa.allocator());
     defer reg.deinit();
 
-    var state = State.init(&app, &reg);
+    app.start();
+    defer app.stop();
 
-    state.app.start();
-    defer state.app.stop();
+    const map = Map.new(22);
+    var state = State.new(&app, &reg, &map);
 
-    _ = spawnEntity(&state);
+    state.player_debug = setupPlayerDebug(&state);
+    state.player = setupPlayer(&state);
+    setupMap(&state);
 
     while (state.app.isRunning()) {
-        handleAppInput(&state);
+        const delta_time = rl.getFrameTime();
 
-        systems.beginFrame();
+        handleAppInput(&state);
+        handlePlayerInput(&state);
+
+        move(&state, delta_time);
+
+        // TODO:
+        if (state.app.debug_mode) {
+            const coord = reg.getConst(comp.GridPosition, state.player);
+            const source_coord = m.Vec2_i32.new(coord.x, coord.y);
+            const pos = state.map.coordToPosition(source_coord);
+            var debug_pos = reg.get(comp.Position, state.player_debug);
+            debug_pos.x = pos.x();
+            debug_pos.y = pos.y();
+        }
+
+        systems.beginFrame(null);
+        // TODO: Rename `renderEntites` => `draw`.
         systems.renderEntities(state.reg);
         if (state.app.debug_mode) {
             systems.renderDebug(state.reg);
@@ -50,17 +70,9 @@ pub fn main() !void {
     }
 }
 
-fn spawnEntity(state: *State) entt.Entity {
-    return entities.createRenderable(
-        state.reg,
-        comp.Position{
-            .x = state.config.getDisplayWidth() / 2 - 50,
-            .y = state.config.getDisplayHeight() / 2 - 50,
-        },
-        comp.Shape.rectangle(100, 100),
-        comp.Visual.stub(),
-    );
-}
+//------------------------------------------------------------------------------
+// Input
+//------------------------------------------------------------------------------
 
 fn handleAppInput(state: *State) void {
     if (rl.windowShouldClose() or
@@ -72,5 +84,148 @@ fn handleAppInput(state: *State) void {
 
     if (rl.isKeyPressed(rl.KeyboardKey.key_f1)) {
         state.app.toggleDebugMode();
+    }
+}
+
+fn handlePlayerInput(state: *State) void {
+    const movement = state.reg.get(comp.Movement, state.player);
+
+    if (rl.isKeyDown(rl.KeyboardKey.key_h)) {
+        movement.next_direction = .left;
+    } else if (rl.isKeyDown(rl.KeyboardKey.key_l)) {
+        movement.next_direction = .right;
+    } else if (rl.isKeyDown(rl.KeyboardKey.key_k)) {
+        movement.next_direction = .up;
+    } else if (rl.isKeyDown(rl.KeyboardKey.key_j)) {
+        movement.next_direction = .down;
+    }
+
+    if (canChangeDirection(state) and canMove(state, movement.next_direction)) {
+        movement.direction = movement.next_direction;
+    }
+}
+
+//------------------------------------------------------------------------------
+// Entities
+//------------------------------------------------------------------------------
+
+fn setupMap(state: *State) void {
+    const tile_size = state.map.tile_size;
+    for (state.map.data, 0..) |tiles, row| {
+        for (tiles, 0..) |tile, col| {
+            const visual = switch (tile) {
+                .wall => comp.Visual.color(rl.Color.blue, false),
+                .space => comp.Visual.color(rl.Color.black, false),
+                .door => comp.Visual.color(rl.Color.ray_white, false),
+            };
+            const coord = m.Vec2_i32.new(@intCast(col), @intCast(row));
+            const pos = state.map.coordToPosition(coord);
+            _ = entities.createRenderable(
+                state.reg,
+                comp.Position{ .x = pos.x(), .y = pos.y() },
+                comp.Shape.rectangle(tile_size, tile_size),
+                visual,
+            );
+        }
+    }
+}
+
+fn setupPlayerDebug(state: *State) entt.Entity {
+    const pos = state.map.coordToPosition(state.map.player_spawn_coord);
+    return entities.createRenderable(
+        state.reg,
+        comp.Position.new(pos.x(), pos.y()),
+        comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
+        comp.Visual.color(rl.Color.yellow.fade(0.5), false),
+    );
+}
+
+fn setupPlayer(state: *State) entt.Entity {
+    const spawn_coord = state.map.player_spawn_coord;
+    const position = state.map.coordToPosition(spawn_coord);
+    const e = entities.createRenderable(
+        state.reg,
+        comp.Position.new(position.x(), position.y()),
+        comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
+        comp.Visual.stub(),
+    );
+    state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y())); // TODO:
+    state.reg.add(e, comp.Movement.new(.right));
+    state.reg.add(e, comp.Speed.uniform(100));
+    return e;
+}
+
+/// TODO:
+/// Make sure, the entity can change direction even if not currently on a tile,
+/// if the intended movement is on the same axis as the current direction.
+fn canChangeDirection(state: *State) bool {
+    const position = state.reg.getConst(comp.Position, state.player);
+    const pos = m.Vec2.new(position.x, position.y);
+    const coord = state.map.positionToCoord(pos);
+    const tile_pos = state.map.coordToPosition(coord);
+    return pos.eql(tile_pos);
+}
+
+fn canMove(state: *State, direction: comp.Direction) bool {
+    const grid_position = state.reg.getConst(comp.GridPosition, state.player);
+    const direction_vec = direction.toVec2();
+    const target_grid_position = m.Vec2_i32
+        .new(grid_position.x, grid_position.y)
+        .add(m.Vec2_i32.new(@intFromFloat(direction_vec.x()), @intFromFloat(direction_vec.y())));
+    return state.map.getTile(target_grid_position) == .space;
+}
+
+fn move(state: *State, delta_time: f32) void {
+    const movement = state.reg.getConst(comp.Movement, state.player);
+    const speed = state.reg.getConst(comp.Speed, state.player);
+    const position = state.reg.get(comp.Position, state.player);
+    const grid_position = state.reg.get(comp.GridPosition, state.player);
+
+    const direction_vec = movement.direction.toVec2();
+    const direction_vec_i32 = m.Vec2_i32.new(
+        @intFromFloat(direction_vec.x()),
+        @intFromFloat(direction_vec.y()),
+    );
+    const target_tile_coord = m.Vec2_i32
+        .new(grid_position.x, grid_position.y)
+        .add(direction_vec_i32);
+
+    if (state.map.getTile(target_tile_coord) == .space) {
+        const pos_offset = m.Vec2
+            .new(speed.x, speed.y)
+            .scale(delta_time)
+            .mul(direction_vec);
+        const target_pos = m.Vec2.new(position.x, position.y).add(pos_offset);
+        const target_tile_pos = state.map.coordToPosition(target_tile_coord);
+
+        // Get distance from target position after movement to the actual
+        // position of the target tile.
+        const distance = target_tile_pos.sub(target_pos);
+        const distance_mask = distance.mul(direction_vec);
+
+        // Get the corrected target position considering the actual position of
+        // the target tile.
+        // If the entities target position (= position after movement) is beyond
+        // or exactly at the position of the target tile, snap the the entities
+        // target position back to the tile position. Use the entites target
+        // position otherwise, because in this case, the entity has not yet
+        // reached the target tile.
+        var corrected_target_pos = target_pos;
+        if ((direction_vec.x() != 0 and distance_mask.x() <= 0) or
+            (direction_vec.y() != 0 and distance_mask.y() <= 0))
+        {
+            corrected_target_pos = target_pos.add(distance);
+            // Update the entities grid position, if the reached the position of
+            // the target tile.
+            const grid_position_vec = m.Vec2_i32
+                .new(grid_position.x, grid_position.y)
+                .add(direction_vec_i32);
+            grid_position.x = grid_position_vec.x();
+            grid_position.y = grid_position_vec.y();
+        }
+
+        // Update entity position.
+        position.x = corrected_target_pos.x();
+        position.y = corrected_target_pos.y();
     }
 }

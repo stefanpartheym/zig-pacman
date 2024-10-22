@@ -29,9 +29,9 @@ pub fn updateAnimations(reg: *entt.Registry) void {
     }
 }
 
-pub fn beginFrame() void {
+pub fn beginFrame(clear_color: ?rl.Color) void {
     rl.beginDrawing();
-    rl.clearBackground(rl.Color.black);
+    rl.clearBackground(clear_color orelse rl.Color.blank);
 }
 
 pub fn endFrame() void {
