@@ -40,6 +40,7 @@ pub fn main() !void {
 
     state.player_debug = setupPlayerDebug(&state);
     state.player = setupPlayer(&state);
+    _ = setupEnemy(&state);
     setupMap(&state);
 
     while (state.app.isRunning()) {
@@ -149,9 +150,24 @@ fn setupPlayer(state: *State) entt.Entity {
         comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
         comp.Visual.stub(),
     );
-    state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y())); // TODO:
+    state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
     state.reg.add(e, comp.Movement.new(.right));
     state.reg.add(e, comp.Speed.uniform(100));
+    return e;
+}
+
+fn setupEnemy(state: *State) entt.Entity {
+    const spawn_coord = m.Vec2_i32.new(1, 1);
+    const position = state.map.coordToPosition(spawn_coord);
+    const e = entities.createRenderable(
+        state.reg,
+        comp.Position.new(position.x(), position.y()),
+        comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
+        comp.Visual.stub(),
+    );
+    state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
+    state.reg.add(e, comp.Movement.new(.down));
+    state.reg.add(e, comp.Speed.uniform(25));
     return e;
 }
 
@@ -175,11 +191,25 @@ fn canMove(state: *State, direction: comp.Direction) bool {
     return state.map.getTile(target_grid_position) == .space;
 }
 
+//------------------------------------------------------------------------------
+// Movement
+//------------------------------------------------------------------------------
+
 fn move(state: *State, delta_time: f32) void {
-    const movement = state.reg.getConst(comp.Movement, state.player);
-    const speed = state.reg.getConst(comp.Speed, state.player);
-    const position = state.reg.get(comp.Position, state.player);
-    const grid_position = state.reg.get(comp.GridPosition, state.player);
+    var view = state.reg.view(.{ comp.Movement, comp.Speed, comp.Position, comp.GridPosition }, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        moveEntity(state, delta_time, entity);
+    }
+}
+
+fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
+    const reg = state.reg;
+
+    const movement = reg.getConst(comp.Movement, entity);
+    const speed = reg.getConst(comp.Speed, entity);
+    const position = reg.get(comp.Position, entity);
+    const grid_position = reg.get(comp.GridPosition, entity);
 
     const direction_vec = movement.direction.toVec2();
     const direction_vec_i32 = m.Vec2_i32.new(
