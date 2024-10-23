@@ -62,10 +62,9 @@ pub fn main() !void {
         }
 
         systems.beginFrame(null);
-        // TODO: Rename `renderEntites` => `draw`.
-        systems.renderEntities(state.reg);
+        systems.draw(state.reg);
         if (state.app.debug_mode) {
-            systems.renderDebug(state.reg);
+            systems.drawDebug(state.reg);
         }
         systems.endFrame();
     }

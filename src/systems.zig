@@ -38,8 +38,8 @@ pub fn endFrame() void {
     rl.endDrawing();
 }
 
-/// Render debug information and entity shape AABB's.
-pub fn renderDebug(reg: *entt.Registry) void {
+/// Draw debug information and entity shape AABB's.
+pub fn drawDebug(reg: *entt.Registry) void {
     rl.drawFPS(10, 10);
     var view = reg.view(.{ comp.Position, comp.Shape, comp.Visual }, .{});
     var iter = view.entityIterator();
@@ -50,7 +50,7 @@ pub fn renderDebug(reg: *entt.Registry) void {
             pos.x -= shape.getWidth() / 2;
             pos.y -= shape.getHeight() / 2;
         }
-        renderEntity(
+        drawEntity(
             pos,
             comp.Shape.rectangle(shape.getWidth(), shape.getHeight()),
             comp.Visual.color(rl.Color.yellow, true),
@@ -58,22 +58,22 @@ pub fn renderDebug(reg: *entt.Registry) void {
     }
 }
 
-pub fn renderEntities(reg: *entt.Registry) void {
+pub fn draw(reg: *entt.Registry) void {
     var view = reg.view(.{ comp.Position, comp.Shape, comp.Visual }, .{});
     var iter = view.entityIterator();
     while (iter.next()) |entity| {
         const pos = view.getConst(comp.Position, entity);
         const shape = view.getConst(comp.Shape, entity);
         const visual = view.getConst(comp.Visual, entity);
-        renderEntity(pos, shape, visual);
+        drawEntity(pos, shape, visual);
     }
 }
 
-fn renderEntity(pos: comp.Position, shape: comp.Shape, visual: comp.Visual) void {
+fn drawEntity(pos: comp.Position, shape: comp.Shape, visual: comp.Visual) void {
     switch (visual) {
-        .stub => renderStub(pos, shape),
-        .color => renderShape(pos, shape, visual.color.value, visual.color.outline),
-        .sprite => renderSprite(
+        .stub => drawStub(pos, shape),
+        .color => drawShape(pos, shape, visual.color.value, visual.color.outline),
+        .sprite => drawSprite(
             .{
                 .x = pos.x,
                 .y = pos.y,
@@ -95,7 +95,7 @@ fn renderEntity(pos: comp.Position, shape: comp.Shape, visual: comp.Visual) void
                 .width = texture_width / frames,
                 .height = texture_height,
             };
-            renderSprite(
+            drawSprite(
                 .{
                     .x = pos.x,
                     .y = pos.y,
@@ -109,31 +109,14 @@ fn renderEntity(pos: comp.Position, shape: comp.Shape, visual: comp.Visual) void
     }
 }
 
-fn renderTextCentered(
-    text: [*:0]const u8,
-    size: i32,
-    color: rl.Color,
-    display_width: i32,
-    display_height: i32,
-) void {
-    const text_width: f32 = @floatFromInt(rl.measureText(text, size));
-    rl.drawText(
-        text,
-        @divTrunc(display_width, 2) - @divTrunc(text_width, 2),
-        @divTrunc(display_height, 2) - @divTrunc(size, 2),
-        size,
-        color,
-    );
-}
-
-/// Render a stub shape.
+/// Draw  a stub shape.
 /// TODO: Make visual appearance more noticeable.
-fn renderStub(pos: comp.Position, shape: comp.Shape) void {
-    renderShape(pos, shape, rl.Color.magenta, false);
+fn drawStub(pos: comp.Position, shape: comp.Shape) void {
+    drawShape(pos, shape, rl.Color.magenta, false);
 }
 
-/// Render a sprite.
-fn renderSprite(target: Rect, source: Rect, texture: rl.Texture) void {
+/// Draw a sprite.
+fn drawSprite(target: Rect, source: Rect, texture: rl.Texture) void {
     texture.drawPro(
         .{
             .x = source.x,
@@ -153,8 +136,8 @@ fn renderSprite(target: Rect, source: Rect, texture: rl.Texture) void {
     );
 }
 
-/// Generic rendering function to be used for `stub` and `color` visuals.
-fn renderShape(pos: comp.Position, shape: comp.Shape, color: rl.Color, outline: bool) void {
+/// Generic drawing function to be used for `stub` and `color` visuals.
+fn drawShape(pos: comp.Position, shape: comp.Shape, color: rl.Color, outline: bool) void {
     const p = .{ .x = pos.x, .y = pos.y };
     switch (shape) {
         .triangle => {
