@@ -14,7 +14,6 @@ pub const State = struct {
 
     // Entities
     player: entt.Entity,
-    player_debug: entt.Entity,
 
     pub fn new(
         app: *application.Application,
@@ -27,7 +26,6 @@ pub const State = struct {
             .reg = reg,
             .map = map,
             .player = undefined,
-            .player_debug = undefined,
         };
     }
 };

@@ -39,7 +39,7 @@ pub fn endFrame() void {
 }
 
 /// Draw debug information and entity shape AABB's.
-pub fn drawDebug(reg: *entt.Registry) void {
+pub fn drawDebug(reg: *entt.Registry, color: rl.Color) void {
     rl.drawFPS(10, 10);
     var view = reg.view(.{ comp.Position, comp.Shape, comp.Visual }, .{});
     var iter = view.entityIterator();
@@ -53,7 +53,7 @@ pub fn drawDebug(reg: *entt.Registry) void {
         drawEntity(
             pos,
             comp.Shape.rectangle(shape.getWidth(), shape.getHeight()),
-            comp.Visual.color(rl.Color.yellow, true),
+            comp.Visual.color(color, true),
         );
     }
 }
@@ -111,12 +111,12 @@ fn drawEntity(pos: comp.Position, shape: comp.Shape, visual: comp.Visual) void {
 
 /// Draw  a stub shape.
 /// TODO: Make visual appearance more noticeable.
-fn drawStub(pos: comp.Position, shape: comp.Shape) void {
+pub fn drawStub(pos: comp.Position, shape: comp.Shape) void {
     drawShape(pos, shape, rl.Color.magenta, false);
 }
 
 /// Draw a sprite.
-fn drawSprite(target: Rect, source: Rect, texture: rl.Texture) void {
+pub fn drawSprite(target: Rect, source: Rect, texture: rl.Texture) void {
     texture.drawPro(
         .{
             .x = source.x,
@@ -137,7 +137,7 @@ fn drawSprite(target: Rect, source: Rect, texture: rl.Texture) void {
 }
 
 /// Generic drawing function to be used for `stub` and `color` visuals.
-fn drawShape(pos: comp.Position, shape: comp.Shape, color: rl.Color, outline: bool) void {
+pub fn drawShape(pos: comp.Position, shape: comp.Shape, color: rl.Color, outline: bool) void {
     const p = .{ .x = pos.x, .y = pos.y };
     switch (shape) {
         .triangle => {

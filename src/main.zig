@@ -38,10 +38,12 @@ pub fn main() !void {
     const map = Map.new(22);
     var state = State.new(&app, &reg, &map);
 
-    state.player_debug = setupPlayerDebug(&state);
+    // Setup entities
     state.player = setupPlayer(&state);
     _ = setupEnemy(&state);
     setupMap(&state);
+
+    const deubg_color = rl.Color.yellow.alpha(0.5);
 
     while (state.app.isRunning()) {
         const delta_time = rl.getFrameTime();
@@ -51,20 +53,11 @@ pub fn main() !void {
 
         move(&state, delta_time);
 
-        // TODO:
-        if (state.app.debug_mode) {
-            const coord = reg.getConst(comp.GridPosition, state.player);
-            const source_coord = m.Vec2_i32.new(coord.x, coord.y);
-            const pos = state.map.coordToPosition(source_coord);
-            var debug_pos = reg.get(comp.Position, state.player_debug);
-            debug_pos.x = pos.x();
-            debug_pos.y = pos.y();
-        }
-
         systems.beginFrame(null);
         systems.draw(state.reg);
         if (state.app.debug_mode) {
-            systems.drawDebug(state.reg);
+            debugDrawGridPositions(&state, deubg_color);
+            systems.drawDebug(state.reg, deubg_color);
         }
         systems.endFrame();
     }
@@ -128,16 +121,6 @@ fn setupMap(state: *State) void {
             );
         }
     }
-}
-
-fn setupPlayerDebug(state: *State) entt.Entity {
-    const pos = state.map.coordToPosition(state.map.player_spawn_coord);
-    return entities.createRenderable(
-        state.reg,
-        comp.Position.new(pos.x(), pos.y()),
-        comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
-        comp.Visual.color(rl.Color.yellow.fade(0.5), false),
-    );
 }
 
 fn setupPlayer(state: *State) entt.Entity {
@@ -256,5 +239,27 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
         // Update entity position.
         position.x = corrected_target_pos.x();
         position.y = corrected_target_pos.y();
+    }
+}
+
+//------------------------------------------------------------------------------
+// Debugging
+//------------------------------------------------------------------------------
+
+/// Draws an entities grid positions in debug mode.
+fn debugDrawGridPositions(state: *State, color: rl.Color) void {
+    const reg = state.reg;
+    const tile_size = state.map.tile_size;
+    var view = reg.view(.{comp.GridPosition}, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        const grid_pos = reg.getConst(comp.GridPosition, entity);
+        const screen_pos = state.map.coordToPosition(m.Vec2_i32.new(grid_pos.x, grid_pos.y));
+        systems.drawShape(
+            comp.Position.new(screen_pos.x(), screen_pos.y()),
+            comp.Shape.rectangle(tile_size, tile_size),
+            color,
+            false,
+        );
     }
 }
