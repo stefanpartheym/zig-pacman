@@ -52,9 +52,9 @@ pub const Direction = enum {
             // Direction `up` and `down` return their counterpart.
             // `Vec2` uses a cartesian coordinate system (y axis grows up) and
             // we are using a raster coordinate system (y axis grows down).
-            // Therfore, `up` and `down` must be flipped.
-            .up => m.Vec2.down(),
-            .down => m.Vec2.up(),
+            // Therfore, `up` and `down` must be negated.
+            .up => m.Vec2.up().negate(),
+            .down => m.Vec2.down().negate(),
             .left => m.Vec2.left(),
             .right => m.Vec2.right(),
         };

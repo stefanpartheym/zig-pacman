@@ -194,13 +194,9 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
     const grid_position = reg.get(comp.GridPosition, entity);
 
     const direction_vec = movement.direction.toVec2();
-    const direction_vec_i32 = m.Vec2_i32.new(
-        @intFromFloat(direction_vec.x()),
-        @intFromFloat(direction_vec.y()),
-    );
     const target_tile_coord = m.Vec2_i32
         .new(grid_position.x, grid_position.y)
-        .add(direction_vec_i32);
+        .add(direction_vec.cast(i32));
 
     if (state.map.getTile(target_tile_coord) == .space) {
         const pos_offset = m.Vec2
@@ -213,7 +209,18 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
         // Get distance from target position after movement to the actual
         // position of the target tile.
         const distance = target_tile_pos.sub(target_pos);
-        const distance_mask = distance.mul(direction_vec);
+        // By masking the distance with the direction, the resulting vector has
+        // two benefits:
+        // 1. It only contains the distance to the target tile for the direction
+        //    in which the entity is currently moving:
+        //    - direction is left or right: Y is 0, X contains the distance
+        //    - direction is up or down:    X is 0, Y contains the distance
+        // 2. The sign (negative or positive) of the relevant value will tell,
+        //    if the entity's target position is already beyond the target tile
+        //    position or if it's not yet there:
+        //    - value is above 0: Entity has not yet reached target tile.
+        //    - value is below 0: Entity has exceeded position of target tile.
+        const distance_masked = distance.mul(direction_vec);
 
         // Get the corrected target position considering the actual position of
         // the target tile.
@@ -223,15 +230,13 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
         // position otherwise, because in this case, the entity has not yet
         // reached the target tile.
         var corrected_target_pos = target_pos;
-        if ((direction_vec.x() != 0 and distance_mask.x() <= 0) or
-            (direction_vec.y() != 0 and distance_mask.y() <= 0))
-        {
+        if ((distance_masked.x() + distance_masked.y()) <= 0) {
             corrected_target_pos = target_pos.add(distance);
             // Update the entities grid position, if the reached the position of
             // the target tile.
             const grid_position_vec = m.Vec2_i32
                 .new(grid_position.x, grid_position.y)
-                .add(direction_vec_i32);
+                .add(direction_vec.cast(i32));
             grid_position.x = grid_position_vec.x();
             grid_position.y = grid_position_vec.y();
         }
