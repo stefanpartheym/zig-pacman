@@ -35,6 +35,10 @@
             .url = "git+https://github.com/kooparse/zalgebra.git#e36116987d11c4a28ab8a03ab62d71be8b81404a",
             .hash = "12200e1b17e15217623e36563e459164fff4debb8210ea9d027d8548aca6d30f0811",
         },
+        .@"zig-graph" = .{
+            .url = "git+https://github.com/stefanpartheym/zig-graph.git#57b61fcfa9b77ca9ec566d692f5aff01e3acbb30",
+            .hash = "12203d3c60cb424b39b7f689c3299968ad8f86a29be33212b78af422f5deadf57e37",
+        },
     },
     .paths = .{
         "build.zig",

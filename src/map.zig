@@ -1,4 +1,6 @@
+const std = @import("std");
 const m = @import("math");
+const DirectedGraph = @import("utils/graph.zig").DirectedGraph;
 
 pub const MapTileType = enum {
     wall,
@@ -6,19 +8,59 @@ pub const MapTileType = enum {
     door,
 };
 
+const MapGraphContext = struct {
+    const Self = @This();
+    pub fn hash(_: Self, key: m.Vec2_i32) u64 {
+        return @as(u64, @intCast(key.x())) << 32 | @as(u64, @intCast(key.y()));
+    }
+    pub fn eql(_: Self, key1: m.Vec2_i32, key2: m.Vec2_i32) bool {
+        return key1.eql(key2);
+    }
+};
+const MapGraph = DirectedGraph(m.Vec2_i32, MapGraphContext);
+
 pub const Map = struct {
     const Self = @This();
 
     tile_size: f32,
     data: [MAP_ROWS][MAP_COLS]MapTileType,
+    graph: MapGraph,
     player_spawn_coord: m.Vec2_i32,
 
-    pub fn new(tile_size: f32) Self {
+    pub fn init(allocator: std.mem.Allocator, tile_size: f32) Self {
         return Self{
             .tile_size = tile_size,
             .data = MAP_DEFAULT_DATA,
+            .graph = MapGraph.init(allocator),
             .player_spawn_coord = m.Vec2_i32.new(10, 15),
         };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.graph.deinit();
+    }
+
+    pub fn setup(self: *Self) !void {
+        for (self.data, 0..) |row, index_y| {
+            const y: i32 = @intCast(index_y);
+            for (row, 0..) |tile, index_x| {
+                const x: i32 = @intCast(index_x);
+                if (tile == .space) {
+                    const current = m.Vec2_i32.new(x, y);
+                    try self.graph.add(current);
+                    const previous_x = m.Vec2_i32.new(x - 1, y);
+                    if (x > 0 and self.graph.contains(previous_x)) {
+                        try self.graph.addEdge(previous_x, current, 1);
+                        try self.graph.addEdge(current, previous_x, 1);
+                    }
+                    const previous_y = m.Vec2_i32.new(x, y - 1);
+                    if (y > 0 and self.graph.contains(previous_y)) {
+                        try self.graph.addEdge(previous_y, current, 1);
+                        try self.graph.addEdge(current, previous_y, 1);
+                    }
+                }
+            }
+        }
     }
 
     pub fn coordToPosition(self: *const Self, coord: m.Vec2_i32) m.Vec2 {

@@ -10,7 +10,7 @@ pub const State = struct {
     app: *application.Application,
     config: *application.ApplicationConfig,
     reg: *entt.Registry,
-    map: *const Map,
+    map: *Map,
 
     // Entities
     player: entt.Entity,
@@ -18,7 +18,7 @@ pub const State = struct {
     pub fn new(
         app: *application.Application,
         reg: *entt.Registry,
-        map: *const Map,
+        map: *Map,
     ) Self {
         return Self{
             .app = app,

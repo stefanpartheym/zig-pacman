@@ -279,3 +279,20 @@ pub const GridPosition = struct {
         };
     }
 };
+
+pub const EnemyType = enum {
+    blinky,
+    pinky,
+    inky,
+    clyde,
+};
+
+pub const Enemy = struct {
+    const Self = @This();
+
+    type: EnemyType,
+
+    pub fn new(enemy_type: EnemyType) Self {
+        return Self{ .type = enemy_type };
+    }
+};

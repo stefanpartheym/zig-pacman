@@ -7,6 +7,7 @@ const Paa = @import("paa.zig");
 const Application = @import("application.zig").Application;
 const State = @import("state.zig").State;
 const Map = @import("map.zig").Map;
+const graph = @import("utils/graph.zig");
 const comp = @import("components.zig");
 const systems = @import("systems.zig");
 const entities = @import("entities.zig");
@@ -35,12 +36,18 @@ pub fn main() !void {
     app.start();
     defer app.stop();
 
-    const map = Map.new(22);
+    var map = Map.init(paa.allocator(), 22);
+    defer map.deinit();
+    try map.setup();
+
     var state = State.new(&app, &reg, &map);
 
     // Setup entities
     state.player = setupPlayer(&state);
-    _ = setupEnemy(&state);
+    _ = setupEnemy(&state, .pinky, m.Vec2_i32.new(1, 1));
+    // _ = setupEnemy(&state, .blinky, m.Vec2_i32.new(19, 1));
+    // _ = setupEnemy(&state, .inky, m.Vec2_i32.new(11, 12));
+    // _ = setupEnemy(&state, .clyde, m.Vec2_i32.new(11, 13));
     setupMap(&state);
 
     const deubg_color = rl.Color.yellow.alpha(0.5);
@@ -50,6 +57,8 @@ pub fn main() !void {
 
         handleAppInput(&state);
         handlePlayerInput(&state);
+        try updateEnemies(paa.allocator(), &state);
+        updateDirection(&state);
 
         move(&state, delta_time);
 
@@ -57,6 +66,8 @@ pub fn main() !void {
         systems.draw(state.reg);
         if (state.app.debug_mode) {
             debugDrawGridPositions(&state, deubg_color);
+            try debugDrawMapGraph(state.map, rl.Color.red);
+            try debugDrawEnemyPath(paa.allocator(), &state, rl.Color.green);
             systems.drawDebug(state.reg, deubg_color);
         }
         systems.endFrame();
@@ -91,10 +102,6 @@ fn handlePlayerInput(state: *State) void {
         movement.next_direction = .up;
     } else if (rl.isKeyDown(rl.KeyboardKey.key_j)) {
         movement.next_direction = .down;
-    }
-
-    if (canChangeDirection(state) and canMove(state, movement.next_direction)) {
-        movement.direction = movement.next_direction;
     }
 }
 
@@ -138,8 +145,7 @@ fn setupPlayer(state: *State) entt.Entity {
     return e;
 }
 
-fn setupEnemy(state: *State) entt.Entity {
-    const spawn_coord = m.Vec2_i32.new(1, 1);
+fn setupEnemy(state: *State, enemy_type: comp.EnemyType, spawn_coord: m.Vec2_i32) entt.Entity {
     const position = state.map.coordToPosition(spawn_coord);
     const e = entities.createRenderable(
         state.reg,
@@ -148,34 +154,85 @@ fn setupEnemy(state: *State) entt.Entity {
         comp.Visual.stub(),
     );
     state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
-    state.reg.add(e, comp.Movement.new(.down));
-    state.reg.add(e, comp.Speed.uniform(25));
+    state.reg.add(e, comp.Movement.new(.right));
+    state.reg.add(e, comp.Speed.uniform(100));
+    state.reg.add(e, comp.Enemy.new(enemy_type));
     return e;
 }
 
-/// TODO:
-/// Make sure, the entity can change direction even if not currently on a tile,
-/// if the intended movement is on the same axis as the current direction.
-fn canChangeDirection(state: *State) bool {
-    const position = state.reg.getConst(comp.Position, state.player);
+//------------------------------------------------------------------------------
+// Update
+//------------------------------------------------------------------------------
+
+fn canChangeDirection(map: *Map, position: comp.Position) bool {
     const pos = m.Vec2.new(position.x, position.y);
-    const coord = state.map.positionToCoord(pos);
-    const tile_pos = state.map.coordToPosition(coord);
+    const coord = map.positionToCoord(pos);
+    const tile_pos = map.coordToPosition(coord);
     return pos.eql(tile_pos);
 }
 
-fn canMove(state: *State, direction: comp.Direction) bool {
-    const grid_position = state.reg.getConst(comp.GridPosition, state.player);
+fn canMove(map: *Map, grid_position: comp.GridPosition, direction: comp.Direction) bool {
     const direction_vec = direction.toVec2();
     const target_grid_position = m.Vec2_i32
         .new(grid_position.x, grid_position.y)
         .add(m.Vec2_i32.new(@intFromFloat(direction_vec.x()), @intFromFloat(direction_vec.y())));
-    return state.map.getTile(target_grid_position) == .space;
+    return map.getTile(target_grid_position) == .space;
 }
 
-//------------------------------------------------------------------------------
-// Movement
-//------------------------------------------------------------------------------
+fn updateDirection(state: *State) void {
+    const reg = state.reg;
+    var view = reg.view(.{ comp.Movement, comp.Position, comp.GridPosition }, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        const grid_position = reg.getConst(comp.GridPosition, entity);
+        const position = reg.getConst(comp.Position, entity);
+        const movement = reg.get(comp.Movement, entity);
+        if (canChangeDirection(state.map, position) and
+            canMove(state.map, grid_position, movement.next_direction))
+        {
+            movement.direction = movement.next_direction;
+        }
+    }
+}
+
+fn updateEnemies(allocator: std.mem.Allocator, state: *State) !void {
+    const player_grid_position = state.reg.getConst(comp.GridPosition, state.player);
+    const target_pos = m.Vec2_i32.new(player_grid_position.x, player_grid_position.y);
+
+    var view = state.reg.view(.{ comp.Enemy, comp.Movement, comp.Position, comp.GridPosition }, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        const grid_position = state.reg.getConst(comp.GridPosition, entity);
+        const movement = state.reg.get(comp.Movement, entity);
+        const current_pos = m.Vec2_i32.new(grid_position.x, grid_position.y);
+
+        const path = try graph.dijkstra(
+            m.Vec2_i32,
+            @TypeOf(state.map.graph.ctx),
+            allocator,
+            &state.map.graph,
+            current_pos,
+            target_pos,
+        );
+        defer allocator.free(path);
+
+        if (path.len > 1) {
+            // Skip first element in path, as it is the current position of the
+            // entity.
+            var next_pos = path[1];
+            const offset = next_pos.sub(current_pos);
+            if (offset.x() > 0) {
+                movement.next_direction = .right;
+            } else if (offset.x() < 0) {
+                movement.next_direction = .left;
+            } else if (offset.y() > 0) {
+                movement.next_direction = .down;
+            } else if (offset.y() < 0) {
+                movement.next_direction = .up;
+            }
+        }
+    }
+}
 
 fn move(state: *State, delta_time: f32) void {
     var view = state.reg.view(.{ comp.Movement, comp.Speed, comp.Position, comp.GridPosition }, .{});
@@ -266,5 +323,65 @@ fn debugDrawGridPositions(state: *State, color: rl.Color) void {
             color,
             false,
         );
+    }
+}
+
+fn debugDrawMapGraph(map: *Map, color: rl.Color) !void {
+    var it = map.graph.adjOut.iterator();
+    while (it.next()) |entry| {
+        const source_hash = entry.key_ptr.*;
+        const targets: std.hash_map.AutoHashMap(u64, u64) = entry.value_ptr.*;
+        if (map.graph.lookup(source_hash)) |source| {
+            const pos = map.coordToPosition(source).add(m.Vec2.new(map.tile_size / 2, map.tile_size / 2));
+            systems.drawShape(comp.Position.new(pos.x(), pos.y()), comp.Shape.circle(5), color, true);
+            var targets_it = targets.iterator();
+            while (targets_it.next()) |target_entry| {
+                if (map.graph.lookup(target_entry.key_ptr.*)) |target| {
+                    const target_pos = map.coordToPosition(target).add(m.Vec2.new(map.tile_size / 2, map.tile_size / 2));
+                    rl.drawLine(
+                        @intFromFloat(pos.x()),
+                        @intFromFloat(pos.y()),
+                        @intFromFloat(target_pos.x()),
+                        @intFromFloat(target_pos.y()),
+                        color,
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn debugDrawEnemyPath(allocator: std.mem.Allocator, state: *State, color: rl.Color) !void {
+    const reg = state.reg;
+    const target = reg.getConst(comp.GridPosition, state.player);
+    var view = reg.view(.{comp.GridPosition}, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        const source = reg.getConst(comp.GridPosition, entity);
+        const path = try graph.dijkstra(
+            m.Vec2_i32,
+            @TypeOf(state.map.graph.ctx),
+            allocator,
+            &state.map.graph,
+            m.Vec2_i32.new(source.x, source.y),
+            m.Vec2_i32.new(target.x, target.y),
+        );
+        defer allocator.free(path);
+        var previous_coord: ?m.Vec2_i32 = null;
+        for (path) |coord| {
+            if (previous_coord) |prev_coord| {
+                const offset = m.Vec2.new(state.map.tile_size / 2, state.map.tile_size / 2);
+                const previous_pos = state.map.coordToPosition(prev_coord).add(offset);
+                const current_pos = state.map.coordToPosition(coord).add(offset);
+                rl.drawLine(
+                    @intFromFloat(previous_pos.x()),
+                    @intFromFloat(previous_pos.y()),
+                    @intFromFloat(current_pos.x()),
+                    @intFromFloat(current_pos.y()),
+                    color,
+                );
+            }
+            previous_coord = coord;
+        }
     }
 }
