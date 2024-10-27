@@ -23,6 +23,8 @@ pub const Map = struct {
     const Self = @This();
 
     tile_size: f32,
+    rows: i32,
+    cols: i32,
     data: [MAP_ROWS][MAP_COLS]MapTileType,
     graph: MapGraph,
     player_spawn_coord: m.Vec2_i32,
@@ -30,6 +32,8 @@ pub const Map = struct {
     pub fn init(allocator: std.mem.Allocator, tile_size: f32) Self {
         return Self{
             .tile_size = tile_size,
+            .rows = MAP_ROWS,
+            .cols = MAP_COLS,
             .data = MAP_DEFAULT_DATA,
             .graph = MapGraph.init(allocator),
             .player_spawn_coord = m.Vec2_i32.new(10, 15),
@@ -77,17 +81,18 @@ pub const Map = struct {
         );
     }
 
-    pub fn getTile(self: *const Self, coord: m.Vec2_i32) MapTileType {
-        return self.data[@intCast(coord.y())][@intCast(coord.x())];
+    pub fn sanitizeCoord(self: *const Self, coord: m.Vec2_i32) m.Vec2_i32 {
+        const max_x = self.cols - 1;
+        const max_y = self.rows - 1;
+        var x = coord.x();
+        var y = coord.y();
+        x = if (x < 0) max_x else if (x > max_x) 0 else x;
+        y = if (y < 0) max_y else if (y > max_y) 0 else y;
+        return m.Vec2_i32.new(x, y);
     }
 
-    pub fn getTargetTile(self: *const Map, source_coord: m.Vec2_i32, direction_vector: m.Vec2) MapTileType {
-        const direction = m.Vec2_i32.new(
-            @intFromFloat(direction_vector.x()),
-            @intFromFloat(direction_vector.y()),
-        );
-        const target_coord = source_coord.add(direction);
-        return self.getTile(target_coord);
+    pub fn getTile(self: *const Self, coord: m.Vec2_i32) MapTileType {
+        return self.data[@intCast(coord.y())][@intCast(coord.x())];
     }
 };
 

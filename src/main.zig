@@ -172,11 +172,10 @@ fn canChangeDirection(map: *Map, position: comp.Position) bool {
 }
 
 fn canMove(map: *Map, grid_position: comp.GridPosition, direction: comp.Direction) bool {
-    const direction_vec = direction.toVec2();
     const target_grid_position = m.Vec2_i32
         .new(grid_position.x, grid_position.y)
-        .add(m.Vec2_i32.new(@intFromFloat(direction_vec.x()), @intFromFloat(direction_vec.y())));
-    return map.getTile(target_grid_position) == .space;
+        .add(direction.toVec2().cast(i32));
+    return map.getTile(map.sanitizeCoord(target_grid_position)) == .space;
 }
 
 fn updateDirection(state: *State) void {
@@ -251,9 +250,11 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
     const grid_position = reg.get(comp.GridPosition, entity);
 
     const direction_vec = movement.direction.toVec2();
-    const target_tile_coord = m.Vec2_i32
-        .new(grid_position.x, grid_position.y)
-        .add(direction_vec.cast(i32));
+    const target_tile_coord = state.map.sanitizeCoord(
+        m.Vec2_i32
+            .new(grid_position.x, grid_position.y)
+            .add(direction_vec.cast(i32)),
+    );
 
     if (state.map.getTile(target_tile_coord) == .space) {
         const pos_offset = m.Vec2
@@ -291,9 +292,11 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
             corrected_target_pos = target_pos.add(distance);
             // Update the entities grid position, if the reached the position of
             // the target tile.
-            const grid_position_vec = m.Vec2_i32
-                .new(grid_position.x, grid_position.y)
-                .add(direction_vec.cast(i32));
+            const grid_position_vec = state.map.sanitizeCoord(
+                m.Vec2_i32
+                    .new(grid_position.x, grid_position.y)
+                    .add(direction_vec.cast(i32)),
+            );
             grid_position.x = grid_position_vec.x();
             grid_position.y = grid_position_vec.y();
         }
@@ -354,7 +357,7 @@ fn debugDrawMapGraph(map: *Map, color: rl.Color) !void {
 fn debugDrawEnemyPath(allocator: std.mem.Allocator, state: *State, color: rl.Color) !void {
     const reg = state.reg;
     const target = reg.getConst(comp.GridPosition, state.player);
-    var view = reg.view(.{comp.GridPosition}, .{});
+    var view = reg.view(.{ comp.Enemy, comp.GridPosition }, .{});
     var iter = view.entityIterator();
     while (iter.next()) |entity| {
         const source = reg.getConst(comp.GridPosition, entity);
