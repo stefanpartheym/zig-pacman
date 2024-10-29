@@ -59,12 +59,29 @@ pub fn drawDebug(reg: *entt.Registry, color: rl.Color) void {
 }
 
 pub fn draw(reg: *entt.Registry) void {
-    var view = reg.view(.{ comp.Position, comp.Shape, comp.Visual }, .{});
-    var iter = view.entityIterator();
+    const SortContext = struct {
+        /// Compare function to sort entities by their `VisualLayer`.
+        fn sort(r: *entt.Registry, a: entt.Entity, b: entt.Entity) bool {
+            const a_layer = r.tryGet(comp.VisualLayer, a);
+            const b_layer = r.tryGet(comp.VisualLayer, b);
+            if (a_layer != null and b_layer != null) {
+                return a_layer.?.value > b_layer.?.value;
+            } else if (a_layer != null) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+    };
+
+    var group = reg.group(.{ comp.Position, comp.Shape, comp.Visual }, .{}, .{});
+    // Sort entities based on their `VisualLayer`.
+    group.sort(entt.Entity, reg, SortContext.sort);
+    var iter = group.entityIterator();
     while (iter.next()) |entity| {
-        const pos = view.getConst(comp.Position, entity);
-        const shape = view.getConst(comp.Shape, entity);
-        const visual = view.getConst(comp.Visual, entity);
+        const pos = group.getConst(comp.Position, entity);
+        const shape = group.getConst(comp.Shape, entity);
+        const visual = group.getConst(comp.Visual, entity);
         drawEntity(pos, shape, visual);
     }
 }

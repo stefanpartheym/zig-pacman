@@ -155,6 +155,16 @@ pub const VisualType = enum {
     animation,
 };
 
+/// Enables sorting entities by their layer to control the order in which they
+/// are drawn.
+pub const VisualLayer = struct {
+    const Self = @This();
+    value: i32,
+    pub fn new(value: i32) Self {
+        return Self{ .value = value };
+    }
+};
+
 pub const Visual = union(VisualType) {
     const Self = @This();
 

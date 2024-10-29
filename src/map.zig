@@ -1,4 +1,5 @@
 const std = @import("std");
+const entt = @import("entt");
 const m = @import("math");
 const DirectedGraph = @import("utils/graph.zig").DirectedGraph;
 
@@ -22,10 +23,21 @@ const MapGraph = DirectedGraph(m.Vec2_i32, MapGraphContext);
 pub const Map = struct {
     const Self = @This();
 
+    pub const MapItemType = enum {
+        pallet,
+        power_pallet,
+    };
+
+    pub const MapItem = struct {
+        item_type: MapItemType,
+        entity: entt.Entity,
+    };
+
     tile_size: f32,
     rows: i32,
     cols: i32,
     data: [MAP_ROWS][MAP_COLS]MapTileType,
+    items: [MAP_ROWS][MAP_COLS]?MapItem,
     graph: MapGraph,
     player_spawn_coord: m.Vec2_i32,
 
@@ -35,6 +47,7 @@ pub const Map = struct {
             .rows = MAP_ROWS,
             .cols = MAP_COLS,
             .data = MAP_DEFAULT_DATA,
+            .items = undefined,
             .graph = MapGraph.init(allocator),
             .player_spawn_coord = m.Vec2_i32.new(10, 15),
         };
@@ -48,9 +61,11 @@ pub const Map = struct {
         for (self.data, 0..) |row, index_y| {
             const y: i32 = @intCast(index_y);
             for (row, 0..) |tile, index_x| {
-                const x: i32 = @intCast(index_x);
                 if (tile == .space) {
+                    const x: i32 = @intCast(index_x);
                     const current = m.Vec2_i32.new(x, y);
+                    // Add current tile to to the graph and add edges to
+                    // adjacent tiles.
                     try self.graph.add(current);
                     const previous_x = m.Vec2_i32.new(x - 1, y);
                     if (x > 0 and self.graph.contains(previous_x)) {
@@ -65,6 +80,18 @@ pub const Map = struct {
                 }
             }
         }
+    }
+
+    pub fn getItem(self: *Self, coord: m.Vec2_i32) ?MapItem {
+        const x: usize = @intCast(coord.x());
+        const y: usize = @intCast(coord.y());
+        return self.items[y][x];
+    }
+
+    pub fn setItem(self: *Self, coord: m.Vec2_i32, item: ?MapItem) void {
+        const x: usize = @intCast(coord.x());
+        const y: usize = @intCast(coord.y());
+        self.items[y][x] = item;
     }
 
     pub fn coordToPosition(self: *const Self, coord: m.Vec2_i32) m.Vec2 {

@@ -61,6 +61,7 @@ pub fn main() !void {
         updateDirection(&state);
 
         move(&state, delta_time);
+        playerPickupItem(&state);
 
         systems.beginFrame(null);
         systems.draw(state.reg);
@@ -125,9 +126,36 @@ fn setupMap(state: *State) void {
                 comp.Position{ .x = pos.x(), .y = pos.y() },
                 comp.Shape.rectangle(tile_size, tile_size),
                 visual,
+                null,
             );
+
+            // Setup items for each walkable tile.
+            if (tile == .space and !coord.eql(state.map.player_spawn_coord)) {
+                state.map.setItem(coord, setupItem(state, coord, .pallet));
+            } else {
+                state.map.setItem(coord, null);
+            }
         }
     }
+}
+
+fn setupItem(state: *State, coord: m.Vec2_i32, item_type: Map.MapItemType) Map.MapItem {
+    const offset = state.map.tile_size / 2;
+    const shape = comp.Shape.circle(if (item_type == .power_pallet) 6 else 3);
+    const pos = state.map.coordToPosition(coord).add(m.Vec2.new(offset, offset));
+    const visual = comp.Visual.color(rl.Color.gold, false);
+    const e = entities.createRenderable(
+        state.reg,
+        comp.Position.new(pos.x(), pos.y()),
+        shape,
+        visual,
+        comp.VisualLayer.new(1),
+    );
+
+    return Map.MapItem{
+        .item_type = item_type,
+        .entity = e,
+    };
 }
 
 fn setupPlayer(state: *State) entt.Entity {
@@ -138,6 +166,7 @@ fn setupPlayer(state: *State) entt.Entity {
         comp.Position.new(position.x(), position.y()),
         comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
         comp.Visual.stub(),
+        comp.VisualLayer.new(2),
     );
     state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
     state.reg.add(e, comp.Movement.new(.right));
@@ -152,6 +181,7 @@ fn setupEnemy(state: *State, enemy_type: comp.EnemyType, spawn_coord: m.Vec2_i32
         comp.Position.new(position.x(), position.y()),
         comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
         comp.Visual.stub(),
+        comp.VisualLayer.new(2),
     );
     state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
     state.reg.add(e, comp.Movement.new(.right));
@@ -230,6 +260,15 @@ fn updateEnemies(allocator: std.mem.Allocator, state: *State) !void {
                 movement.next_direction = .up;
             }
         }
+    }
+}
+
+fn playerPickupItem(state: *State) void {
+    const grid_position = state.reg.get(comp.GridPosition, state.player);
+    const coord = m.Vec2_i32.new(grid_position.x, grid_position.y);
+    if (state.map.getItem(coord)) |item| {
+        state.map.setItem(coord, null);
+        state.reg.destroy(item.entity);
     }
 }
 
