@@ -44,8 +44,8 @@ pub fn main() !void {
 
     // Setup entities
     state.player = setupPlayer(&state);
-    _ = setupEnemy(&state, .pinky, m.Vec2_i32.new(1, 1));
-    // _ = setupEnemy(&state, .blinky, m.Vec2_i32.new(19, 1));
+    _ = setupEnemy(&state, .blinky, m.Vec2_i32.new(1, 1));
+    // _ = setupEnemy(&state, .pinky, m.Vec2_i32.new(19, 1));
     // _ = setupEnemy(&state, .inky, m.Vec2_i32.new(11, 12));
     // _ = setupEnemy(&state, .clyde, m.Vec2_i32.new(11, 13));
     setupMap(&state);
@@ -165,7 +165,7 @@ fn setupPlayer(state: *State) entt.Entity {
         state.reg,
         comp.Position.new(position.x(), position.y()),
         comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
-        comp.Visual.stub(),
+        comp.Visual.color(rl.Color.yellow, false),
         comp.VisualLayer.new(2),
     );
     state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
@@ -176,11 +176,17 @@ fn setupPlayer(state: *State) entt.Entity {
 
 fn setupEnemy(state: *State, enemy_type: comp.EnemyType, spawn_coord: m.Vec2_i32) entt.Entity {
     const position = state.map.coordToPosition(spawn_coord);
+    const color = switch (enemy_type) {
+        .blinky => rl.Color.red,
+        .pinky => rl.Color.pink,
+        .inky => rl.Color.dark_blue,
+        .clyde => rl.Color.orange,
+    };
     const e = entities.createRenderable(
         state.reg,
         comp.Position.new(position.x(), position.y()),
         comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
-        comp.Visual.stub(),
+        comp.Visual.color(color, false),
         comp.VisualLayer.new(2),
     );
     state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
