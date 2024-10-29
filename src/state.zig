@@ -12,8 +12,9 @@ pub const State = struct {
     reg: *entt.Registry,
     map: *Map,
 
-    // Entities
     player: entt.Entity,
+    score: u32,
+    lives: u8,
 
     pub fn new(
         app: *application.Application,
@@ -26,6 +27,8 @@ pub const State = struct {
             .reg = reg,
             .map = map,
             .player = undefined,
+            .score = 0,
+            .lives = 3,
         };
     }
 };

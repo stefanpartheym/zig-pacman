@@ -65,6 +65,7 @@ pub fn main() !void {
 
         systems.beginFrame(null);
         systems.draw(state.reg);
+        try drawHud(&state);
         if (state.app.debug_mode) {
             debugDrawGridPositions(&state, deubg_color);
             try debugDrawMapGraph(state.map, rl.Color.red);
@@ -275,6 +276,11 @@ fn playerPickupItem(state: *State) void {
     if (state.map.getItem(coord)) |item| {
         state.map.setItem(coord, null);
         state.reg.destroy(item.entity);
+        const score: u32 = switch (item.item_type) {
+            .pallet => 10,
+            .power_pallet => 100,
+        };
+        state.score += score;
     }
 }
 
@@ -353,8 +359,35 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
 }
 
 //------------------------------------------------------------------------------
-// Debugging
+// Drawing
 //------------------------------------------------------------------------------
+
+fn drawHud(state: *State) !void {
+    const color = rl.Color.ray_white;
+    const size = 24;
+    const tile_size: i32 = @intFromFloat(state.map.tile_size);
+    const offset_x = tile_size * state.map.cols + tile_size;
+    const offset_y = 10;
+    var text_buf: [255]u8 = undefined;
+
+    const score_text = try std.fmt.bufPrintZ(&text_buf, "Score: {d}", .{state.score});
+    rl.drawText(
+        score_text,
+        offset_x,
+        offset_y,
+        size,
+        color,
+    );
+
+    const lives_text = try std.fmt.bufPrintZ(&text_buf, "Lives: {d}", .{state.lives});
+    rl.drawText(
+        lives_text,
+        offset_x,
+        offset_y * 2 + size,
+        size,
+        color,
+    );
+}
 
 /// Draws an entities grid positions in debug mode.
 fn debugDrawGridPositions(state: *State, color: rl.Color) void {
