@@ -2,7 +2,7 @@
 
 > My implementation of `Pacman` in [zig](https://ziglang.org/) using [raylib](https://github.com/Not-Nik/raylib-zig) and an [ECS](https://github.com/prime31/zig-ecs).
 
-I'm working on this game as part of [The 20 Games Challange](https://20_games_challenge.gitlab.io/). Pacman is [Challange #5](https://20_games_challenge.gitlab.io/challenge/#3).
+I'm working on this game as part of [The 20 Games Challange](https://20_games_challenge.gitlab.io/). Pacman is [Challange #5](https://20_games_challenge.gitlab.io/challenge/#5).
 
 ## Goals
 
