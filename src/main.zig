@@ -376,11 +376,10 @@ fn debugDrawEnemyPath(allocator: std.mem.Allocator, state: *State, color: rl.Col
                 const offset = m.Vec2.new(state.map.tile_size / 2, state.map.tile_size / 2);
                 const previous_pos = state.map.coordToPosition(prev_coord).add(offset);
                 const current_pos = state.map.coordToPosition(coord).add(offset);
-                rl.drawLine(
-                    @intFromFloat(previous_pos.x()),
-                    @intFromFloat(previous_pos.y()),
-                    @intFromFloat(current_pos.x()),
-                    @intFromFloat(current_pos.y()),
+                rl.drawLineEx(
+                    .{ .x = previous_pos.x(), .y = previous_pos.y() },
+                    .{ .x = current_pos.x(), .y = current_pos.y() },
+                    4,
                     color,
                 );
             }
