@@ -7,6 +7,7 @@ pub const MapTileType = enum {
     wall,
     space,
     door,
+    blank,
 };
 
 const MapGraphContext = struct {
@@ -133,7 +134,7 @@ const MAP_DEFAULT_DATA: [MAP_ROWS][MAP_COLS]MapTileType = .{
     // Row 3
     .{ .wall, .space, .wall, .wall, .wall, .space, .wall, .wall, .wall, .space, .wall, .space, .wall, .wall, .wall, .space, .wall, .wall, .wall, .space, .wall },
     // Row 4
-    .{ .wall, .space, .wall, .space, .wall, .space, .wall, .space, .wall, .space, .wall, .space, .wall, .space, .wall, .space, .wall, .space, .wall, .space, .wall },
+    .{ .wall, .space, .wall, .blank, .wall, .space, .wall, .blank, .wall, .space, .wall, .space, .wall, .blank, .wall, .space, .wall, .blank, .wall, .space, .wall },
     // Row 5
     .{ .wall, .space, .wall, .wall, .wall, .space, .wall, .wall, .wall, .space, .wall, .space, .wall, .wall, .wall, .space, .wall, .wall, .wall, .space, .wall },
     // Row 6
@@ -147,19 +148,19 @@ const MAP_DEFAULT_DATA: [MAP_ROWS][MAP_COLS]MapTileType = .{
     // Row 10
     .{ .wall, .wall, .wall, .wall, .wall, .space, .wall, .wall, .wall, .space, .wall, .space, .wall, .wall, .wall, .space, .wall, .wall, .wall, .wall, .wall },
     // Row 11
-    .{ .space, .space, .space, .space, .wall, .space, .wall, .space, .space, .space, .space, .space, .space, .space, .wall, .space, .wall, .space, .space, .space, .space },
+    .{ .blank, .blank, .blank, .blank, .wall, .space, .wall, .space, .space, .space, .space, .space, .space, .space, .wall, .space, .wall, .blank, .blank, .blank, .blank },
     // Row 12
-    .{ .space, .space, .space, .space, .wall, .space, .wall, .space, .wall, .wall, .door, .wall, .wall, .space, .wall, .space, .wall, .space, .space, .space, .space },
+    .{ .blank, .blank, .blank, .blank, .wall, .space, .wall, .space, .wall, .wall, .door, .wall, .wall, .space, .wall, .space, .wall, .blank, .blank, .blank, .blank },
     // Row 13
-    .{ .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .space, .space, .space, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall },
+    .{ .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .blank, .blank, .blank, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall },
     // Row 14
-    .{ .space, .space, .space, .space, .space, .space, .space, .space, .wall, .space, .space, .space, .wall, .space, .space, .space, .space, .space, .space, .space, .space },
+    .{ .space, .space, .space, .space, .space, .space, .space, .space, .wall, .blank, .blank, .blank, .wall, .space, .space, .space, .space, .space, .space, .space, .space },
     // Row 15
     .{ .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall },
     // Row 16
-    .{ .space, .space, .space, .space, .wall, .space, .wall, .space, .space, .space, .space, .space, .space, .space, .wall, .space, .wall, .space, .space, .space, .space },
+    .{ .blank, .blank, .blank, .blank, .wall, .space, .wall, .space, .space, .space, .space, .space, .space, .space, .wall, .space, .wall, .blank, .blank, .blank, .blank },
     // Row 17
-    .{ .space, .space, .space, .space, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .space, .space, .space, .space },
+    .{ .blank, .blank, .blank, .blank, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .blank, .blank, .blank, .blank },
     // Row 18
     .{ .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall },
     // Row 19

@@ -117,7 +117,7 @@ fn setupMap(state: *State) void {
         for (tiles, 0..) |tile, col| {
             const visual = switch (tile) {
                 .wall => comp.Visual.color(rl.Color.blue, false),
-                .space => comp.Visual.color(rl.Color.black, false),
+                .space, .blank => comp.Visual.color(rl.Color.black, false),
                 .door => comp.Visual.color(rl.Color.ray_white, false),
             };
             const coord = m.Vec2_i32.new(@intCast(col), @intCast(row));
