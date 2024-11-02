@@ -44,8 +44,6 @@ pub fn main() !void {
 
     // Setup entities
     state.player = setupPlayer(&state);
-    // _ = setupEnemy(&state, .blinky, m.Vec2_i32.new(1, 1));
-    // _ = setupEnemy(&state, .pinky, m.Vec2_i32.new(19, 1));
     _ = setupEnemy(&state, .blinky, m.Vec2_i32.new(10, 12));
     _ = setupEnemy(&state, .pinky, m.Vec2_i32.new(10, 13));
     _ = setupEnemy(&state, .inky, m.Vec2_i32.new(11, 12));
@@ -190,7 +188,7 @@ fn setupEnemy(state: *State, enemy_type: comp.EnemyType, spawn_coord: m.Vec2_i32
         comp.Position.new(position.x(), position.y()),
         comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
         comp.Visual.color(color, false),
-        comp.VisualLayer.new(2),
+        comp.VisualLayer.new(3),
     );
     state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
     state.reg.add(e, comp.Speed.uniform(100));
@@ -280,6 +278,8 @@ fn updateEnemies(allocator: std.mem.Allocator, state: *State) !void {
             } else if (offset.y() < 0) {
                 movement.next_direction = .up;
             }
+        } else {
+            movement.next_direction = .none;
         }
     }
 }

@@ -41,6 +41,7 @@ pub const Speed = struct {
 pub const Direction = enum {
     const Self = @This();
 
+    none,
     up,
     down,
     left,
@@ -57,6 +58,7 @@ pub const Direction = enum {
             .down => m.Vec2.down().negate(),
             .left => m.Vec2.left(),
             .right => m.Vec2.right(),
+            .none => m.Vec2.zero(),
         };
     }
 };
