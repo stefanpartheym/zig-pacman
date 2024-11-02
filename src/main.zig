@@ -44,10 +44,12 @@ pub fn main() !void {
 
     // Setup entities
     state.player = setupPlayer(&state);
-    _ = setupEnemy(&state, .blinky, m.Vec2_i32.new(1, 1));
+    // _ = setupEnemy(&state, .blinky, m.Vec2_i32.new(1, 1));
     // _ = setupEnemy(&state, .pinky, m.Vec2_i32.new(19, 1));
-    // _ = setupEnemy(&state, .inky, m.Vec2_i32.new(11, 12));
-    // _ = setupEnemy(&state, .clyde, m.Vec2_i32.new(11, 13));
+    _ = setupEnemy(&state, .blinky, m.Vec2_i32.new(10, 12));
+    _ = setupEnemy(&state, .pinky, m.Vec2_i32.new(10, 13));
+    _ = setupEnemy(&state, .inky, m.Vec2_i32.new(11, 12));
+    _ = setupEnemy(&state, .clyde, m.Vec2_i32.new(11, 13));
     setupMap(&state);
 
     const deubg_color = rl.Color.yellow.alpha(0.5);
@@ -117,7 +119,7 @@ fn setupMap(state: *State) void {
         for (tiles, 0..) |tile, col| {
             const visual = switch (tile) {
                 .wall => comp.Visual.color(rl.Color.blue, false),
-                .space, .blank => comp.Visual.color(rl.Color.black, false),
+                .space, .blank, .exclusive => comp.Visual.color(rl.Color.black, false),
                 .door => comp.Visual.color(rl.Color.ray_white, false),
             };
             const coord = m.Vec2_i32.new(@intCast(col), @intCast(row));
@@ -130,7 +132,7 @@ fn setupMap(state: *State) void {
                 null,
             );
 
-            // Setup items for each walkable tile.
+            // Setup items for each tile, that are walkably by the player.
             if (tile == .space and !coord.eql(state.map.player_spawn_coord)) {
                 state.map.setItem(coord, setupItem(state, coord, .pallet));
             } else {
@@ -191,7 +193,6 @@ fn setupEnemy(state: *State, enemy_type: comp.EnemyType, spawn_coord: m.Vec2_i32
         comp.VisualLayer.new(2),
     );
     state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
-    state.reg.add(e, comp.Movement.new(.right));
     state.reg.add(e, comp.Speed.uniform(100));
     state.reg.add(e, comp.Enemy.new(enemy_type));
     return e;
@@ -201,6 +202,18 @@ fn setupEnemy(state: *State, enemy_type: comp.EnemyType, spawn_coord: m.Vec2_i32
 // Update
 //------------------------------------------------------------------------------
 
+pub fn updateScore(state: *State, value: u32) void {
+    state.score += value;
+    if (state.score > 200 and !state.release_enemies) {
+        state.release_enemies = true;
+        const view = state.reg.view(.{comp.Enemy}, .{});
+        var it = view.entityIterator();
+        while (it.next()) |e| {
+            state.reg.add(e, comp.Movement.new(.up));
+        }
+    }
+}
+
 fn canChangeDirection(map: *Map, position: comp.Position) bool {
     const pos = m.Vec2.new(position.x, position.y);
     const coord = map.positionToCoord(pos);
@@ -208,11 +221,12 @@ fn canChangeDirection(map: *Map, position: comp.Position) bool {
     return pos.eql(tile_pos);
 }
 
-fn canMove(map: *Map, grid_position: comp.GridPosition, direction: comp.Direction) bool {
+fn canMove(state: *State, grid_position: comp.GridPosition, direction: comp.Direction) bool {
     const target_grid_position = m.Vec2_i32
         .new(grid_position.x, grid_position.y)
         .add(direction.toVec2().cast(i32));
-    return map.getTile(map.sanitizeCoord(target_grid_position)) == .space;
+    const tile = state.map.getTile(state.map.sanitizeCoord(target_grid_position));
+    return tile.isWalkable();
 }
 
 fn updateDirection(state: *State) void {
@@ -224,7 +238,7 @@ fn updateDirection(state: *State) void {
         const position = reg.getConst(comp.Position, entity);
         const movement = reg.get(comp.Movement, entity);
         if (canChangeDirection(state.map, position) and
-            canMove(state.map, grid_position, movement.next_direction))
+            canMove(state, grid_position, movement.next_direction))
         {
             movement.direction = movement.next_direction;
         }
@@ -280,7 +294,7 @@ fn playerPickupItem(state: *State) void {
             .pallet => 10,
             .power_pallet => 100,
         };
-        state.score += score;
+        updateScore(state, score);
     }
 }
 
@@ -307,7 +321,8 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
             .add(direction_vec.cast(i32)),
     );
 
-    if (state.map.getTile(target_tile_coord) == .space) {
+    const tile = state.map.getTile(target_tile_coord);
+    if (tile.isWalkable()) {
         const pos_offset = m.Vec2
             .new(speed.x, speed.y)
             .scale(delta_time)

@@ -4,10 +4,17 @@ const m = @import("math");
 const DirectedGraph = @import("utils/graph.zig").DirectedGraph;
 
 pub const MapTileType = enum {
+    const Self = @This();
+
     wall,
     space,
     door,
     blank,
+    exclusive,
+
+    pub fn isWalkable(self: Self) bool {
+        return self == .space or self == .exclusive or self == .door;
+    }
 };
 
 const MapGraphContext = struct {
@@ -62,7 +69,7 @@ pub const Map = struct {
         for (self.data, 0..) |row, index_y| {
             const y: i32 = @intCast(index_y);
             for (row, 0..) |tile, index_x| {
-                if (tile == .space) {
+                if (tile.isWalkable()) {
                     const x: i32 = @intCast(index_x);
                     const current = m.Vec2_i32.new(x, y);
                     // Add current tile to to the graph and add edges to
@@ -152,9 +159,9 @@ const MAP_DEFAULT_DATA: [MAP_ROWS][MAP_COLS]MapTileType = .{
     // Row 12
     .{ .blank, .blank, .blank, .blank, .wall, .space, .wall, .space, .wall, .wall, .door, .wall, .wall, .space, .wall, .space, .wall, .blank, .blank, .blank, .blank },
     // Row 13
-    .{ .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .blank, .blank, .blank, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall },
+    .{ .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .exclusive, .exclusive, .exclusive, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall },
     // Row 14
-    .{ .space, .space, .space, .space, .space, .space, .space, .space, .wall, .blank, .blank, .blank, .wall, .space, .space, .space, .space, .space, .space, .space, .space },
+    .{ .space, .space, .space, .space, .space, .space, .space, .space, .wall, .exclusive, .exclusive, .exclusive, .wall, .space, .space, .space, .space, .space, .space, .space, .space },
     // Row 15
     .{ .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall, .space, .wall, .space, .wall, .wall, .wall, .wall, .wall },
     // Row 16
