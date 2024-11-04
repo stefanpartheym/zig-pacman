@@ -57,7 +57,7 @@ pub const Map = struct {
             .data = MAP_DEFAULT_DATA,
             .items = undefined,
             .graph = MapGraph.init(allocator),
-            .player_spawn_coord = m.Vec2_i32.new(10, 15),
+            .player_spawn_coord = m.Vec2_i32.new(10, 20),
         };
     }
 

@@ -44,10 +44,10 @@ pub fn main() !void {
 
     // Setup entities
     state.player = setupPlayer(&state);
-    _ = setupEnemy(&state, .blinky, m.Vec2_i32.new(10, 12));
-    _ = setupEnemy(&state, .pinky, m.Vec2_i32.new(10, 13));
-    // _ = setupEnemy(&state, .inky, m.Vec2_i32.new(11, 12));
-    // _ = setupEnemy(&state, .clyde, m.Vec2_i32.new(11, 13));
+    state.enemies[0] = setupEnemy(&state, .blinky, m.Vec2_i32.new(10, 10));
+    state.enemies[1] = setupEnemy(&state, .inky, m.Vec2_i32.new(9, 12));
+    state.enemies[2] = setupEnemy(&state, .pinky, m.Vec2_i32.new(10, 12));
+    state.enemies[3] = setupEnemy(&state, .clyde, m.Vec2_i32.new(11, 12));
     setupMap(&state);
 
     const deubg_color = rl.Color.yellow.alpha(0.5);
@@ -170,7 +170,7 @@ fn setupPlayer(state: *State) entt.Entity {
         comp.VisualLayer.new(2),
     );
     state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
-    state.reg.add(e, comp.Movement.new(.right));
+    state.reg.add(e, comp.Movement.new(.none));
     state.reg.add(e, comp.Speed.uniform(100));
     return e;
 }
@@ -200,15 +200,24 @@ fn setupEnemy(state: *State, enemy_type: comp.EnemyType, spawn_coord: m.Vec2_i32
 // Update
 //------------------------------------------------------------------------------
 
-pub fn updateScore(state: *State, value: u32) void {
+pub fn updateScore(state: *State, item_type: Map.MapItemType) void {
+    state.pallets_eaten += 1;
+    const value: u32 = switch (item_type) {
+        .pallet => 10,
+        .power_pallet => 100,
+    };
     state.score += value;
-    if (state.score > 200 and !state.release_enemies) {
-        state.release_enemies = true;
-        const view = state.reg.view(.{comp.Enemy}, .{});
-        var it = view.entityIterator();
-        while (it.next()) |e| {
-            state.reg.add(e, comp.Movement.new(.up));
-        }
+
+    switch (state.pallets_eaten) {
+        // Make the first enemy move after the player consumes the first pallet.
+        1 => state.reg.add(state.enemies[0], comp.Movement.new(.none)),
+        // Release the other enemies after the player consumed 20 pallets.
+        20 => {
+            for (state.enemies[1..]) |e| {
+                state.reg.add(e, comp.Movement.new(.none));
+            }
+        },
+        else => {},
     }
 }
 
@@ -262,11 +271,7 @@ fn playerPickupItem(state: *State) void {
     if (state.map.getItem(coord)) |item| {
         state.map.setItem(coord, null);
         state.reg.destroy(item.entity);
-        const score: u32 = switch (item.item_type) {
-            .pallet => 10,
-            .power_pallet => 100,
-        };
-        updateScore(state, score);
+        updateScore(state, item.item_type);
     }
 }
 
@@ -349,52 +354,59 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
 // Utitlity
 //------------------------------------------------------------------------------
 
+fn getCoordAheadOf(
+    state: *State,
+    ref_coord: m.Vec2_i32,
+    ref_movement: comp.Movement,
+    tiles: i32,
+) m.Vec2_i32 {
+    const directions = [2]m.Vec2_i32{
+        ref_movement.direction.toVec2().cast(i32),
+        ref_movement.next_direction.toVec2().cast(i32),
+    };
+    var direction_idx: usize = 0;
+    var current_target = ref_coord;
+    var i: usize = 0;
+    while (i < tiles) {
+        const new_target_pos = state.map.sanitizeCoord(
+            current_target.add(directions[direction_idx]),
+        );
+        if (state.map.graph.contains(new_target_pos)) {
+            current_target = new_target_pos;
+            i += 1;
+        } else if (direction_idx < directions.len - 1) {
+            direction_idx += 1;
+        } else {
+            break;
+        }
+    }
+    return current_target;
+}
+
 fn getEnemyTargetPath(allocator: std.mem.Allocator, state: *State, entity: entt.Entity) ![]m.Vec2_i32 {
     const player_grid_position = state.reg.getConst(comp.GridPosition, state.player);
-    const player_pos = m.Vec2_i32.new(player_grid_position.x, player_grid_position.y);
+    const player_coord = m.Vec2_i32.new(player_grid_position.x, player_grid_position.y);
     const player_movement = state.reg.getConst(comp.Movement, state.player);
 
     const enemy = state.reg.getConst(comp.Enemy, entity);
     const grid_position = state.reg.getConst(comp.GridPosition, entity);
-    const current_pos = m.Vec2_i32.new(grid_position.x, grid_position.y);
+    const current_coord = m.Vec2_i32.new(grid_position.x, grid_position.y);
 
-    var target_pos = player_pos;
-    switch (enemy.type) {
+    const target_coord =
+        switch (enemy.type) {
         // Ghost pinky tries to get 4 tiles ahead of the player.
-        .pinky => {
-            const advance_tiles = 4;
-            const directions = [2]m.Vec2_i32{
-                player_movement.direction.toVec2().cast(i32),
-                player_movement.next_direction.toVec2().cast(i32),
-            };
-            var current_dir_vec: usize = 0;
-            var current_target_pos = player_pos;
-            var i: usize = 0;
-            while (i < advance_tiles) {
-                const new_target_pos = state.map.sanitizeCoord(
-                    current_target_pos.add(directions[current_dir_vec]),
-                );
-                if (state.map.graph.contains(new_target_pos)) {
-                    current_target_pos = new_target_pos;
-                    i += 1;
-                } else if (current_dir_vec < directions.len - 1) {
-                    current_dir_vec += 1;
-                } else {
-                    break;
-                }
-            }
-            target_pos = current_target_pos;
-        },
-        else => {},
-    }
+        .pinky => getCoordAheadOf(state, player_coord, player_movement, 4),
+        .inky => getCoordAheadOf(state, player_coord, player_movement, 2),
+        else => player_coord,
+    };
 
     return try graph.dijkstra(
         m.Vec2_i32,
         @TypeOf(state.map.graph.ctx),
         allocator,
         &state.map.graph,
-        current_pos,
-        target_pos,
+        current_coord,
+        target_coord,
     );
 }
 

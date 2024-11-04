@@ -14,9 +14,10 @@ pub const State = struct {
     map: *Map,
 
     player: entt.Entity,
+    enemies: [4]entt.Entity,
     score: u32,
     lives: u8,
-    release_enemies: bool,
+    pallets_eaten: u32,
 
     pub fn new(
         app: *application.Application,
@@ -29,9 +30,10 @@ pub const State = struct {
             .reg = reg,
             .map = map,
             .player = undefined,
+            .enemies = undefined,
             .score = 0,
             .lives = 3,
-            .release_enemies = false,
+            .pallets_eaten = 0,
         };
     }
 };
