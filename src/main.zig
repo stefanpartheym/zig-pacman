@@ -326,8 +326,8 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
         // Get the corrected target position considering the actual position of
         // the target tile.
         // If the entities target position (= position after movement) is beyond
-        // or exactly at the position of the target tile, snap the the entities
-        // target position back to the tile position. Use the entites target
+        // or exactly at the position of the target tile, snap the entities
+        // target position back to the tile position. Use the entities target
         // position otherwise, because in this case, the entity has not yet
         // reached the target tile.
         var corrected_target_pos = target_pos;
