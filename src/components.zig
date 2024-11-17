@@ -266,6 +266,8 @@ pub const Cooldown = struct {
     value: f32,
     /// Current cooldown state.
     state: f32 = 0,
+    /// Number of resets.
+    resets: u32 = 0,
 
     pub fn new(value: f32) Self {
         return Self{ .value = value };
@@ -273,10 +275,16 @@ pub const Cooldown = struct {
 
     pub fn reset(self: *Self) void {
         self.state = self.value;
+        self.resets += 1;
     }
 
-    pub fn cool(self: *Self, value: f32) void {
-        self.state -= @min(value, self.state);
+    pub fn set(self: *Self, value: f32) void {
+        self.value = value;
+        self.reset();
+    }
+
+    pub fn update(self: *Self, delta_time: f32) void {
+        self.state -= @min(delta_time, self.state);
     }
 
     pub fn ready(self: *const Self) bool {
@@ -314,7 +322,6 @@ pub const EnemyType = enum {
 };
 
 pub const EnemyState = enum {
-    none,
     chase,
     scatter,
     house,

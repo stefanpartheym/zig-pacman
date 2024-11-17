@@ -38,6 +38,7 @@ pub fn main() !void {
 
     var map = Map.new(22);
     var state = State.new(&app, &reg, &map);
+    state.enemy_state_cooldown.reset();
 
     // Setup entities
     state.player = setupPlayer(&state);
@@ -50,15 +51,16 @@ pub fn main() !void {
     const deubg_color = rl.Color.yellow.alpha(0.5);
 
     while (state.app.isRunning()) {
-        const time = rl.getTime();
         const delta_time = rl.getFrameTime();
 
         handleAppInput(&state);
+
         handlePlayerInput(&state);
-        updateEnemyState(&state, time);
+        updatePlayerDirection(&state);
+
+        updateEnemyState(&state, delta_time);
         updateEnemyTarget(&state);
         updateEnemies(&state);
-        updateDirection(&state);
 
         move(&state, delta_time);
         playerPickupItem(&state);
@@ -214,7 +216,7 @@ pub fn updateScore(state: *State, item_type: Map.MapItemType) void {
     state.score += value;
 }
 
-fn updateDirection(state: *State) void {
+fn updatePlayerDirection(state: *State) void {
     const reg = state.reg;
     var view = reg.view(.{ comp.Movement, comp.Position, comp.GridPosition }, .{comp.Enemy});
     var iter = view.entityIterator();
@@ -230,7 +232,27 @@ fn updateDirection(state: *State) void {
     }
 }
 
-fn updateEnemyState(state: *State, time: f64) void {
+fn updateEnemyState(state: *State, delta_time: f32) void {
+    // Alternate between scatter and chase states 7 times.
+    // Final state is chase state.
+    if (state.enemy_state_cooldown.resets < 8) {
+        // Handle the alternation between scatter and chase states.
+        state.enemy_state_cooldown.update(delta_time);
+        if (state.enemy_state_cooldown.ready()) {
+            switch (state.enemy_state) {
+                .scatter => {
+                    state.enemy_state = .chase;
+                    state.enemy_state_cooldown.set(20);
+                },
+                .chase => {
+                    state.enemy_state = .scatter;
+                    state.enemy_state_cooldown.set(7);
+                },
+                else => {},
+            }
+        }
+    }
+
     const reg = state.reg;
     var view = state.reg.view(.{ comp.Enemy, comp.GridPosition, comp.Movement }, .{});
     var iter = view.entityIterator();
@@ -240,7 +262,7 @@ fn updateEnemyState(state: *State, time: f64) void {
         var new_state = enemy.state;
         switch (enemy.state) {
             .house => {
-                if (time > 4) {
+                if (delta_time > 4) {
                     new_state = .leave_house;
                 } else {
                     const pallet_limit: u32 = switch (enemy.type) {
@@ -260,23 +282,7 @@ fn updateEnemyState(state: *State, time: f64) void {
                 }
             },
             else => {
-                if (time < 7) {
-                    new_state = .scatter;
-                } else if (time < 27) {
-                    new_state = .chase;
-                } else if (time < 34) {
-                    new_state = .scatter;
-                } else if (time < 54) {
-                    new_state = .chase;
-                } else if (time < 59) {
-                    new_state = .scatter;
-                } else if (time < 79) {
-                    new_state = .chase;
-                } else if (time < 84) {
-                    new_state = .scatter;
-                } else {
-                    new_state = .chase;
-                }
+                new_state = state.enemy_state;
             },
         }
 
@@ -305,7 +311,7 @@ fn updateEnemyTarget(state: *State) void {
     const reg = state.reg;
     const player_grid_pos = reg.getConst(comp.GridPosition, state.player);
     const player_movement = reg.getConst(comp.Movement, state.player);
-    const player_coord = m.Vec2_i32.new(player_grid_pos.x, player_grid_pos.y);
+    const player_coord = player_grid_pos.toVec2_i32();
     const player_dir_vec = player_movement.direction.toVec2().cast(i32);
     var view = state.reg.view(.{comp.Enemy}, .{});
     var iter = view.entityIterator();
@@ -399,7 +405,7 @@ fn updateEnemies(state: *State) void {
 
 fn playerPickupItem(state: *State) void {
     const grid_position = state.reg.get(comp.GridPosition, state.player);
-    const coord = m.Vec2_i32.new(grid_position.x, grid_position.y);
+    const coord = grid_position.toVec2_i32();
     if (state.map.getItem(coord)) |item| {
         state.map.setItem(coord, null);
         state.reg.destroy(item.entity);
@@ -540,7 +546,7 @@ fn debugDrawGridPositions(state: *State, color: rl.Color) void {
     var iter = view.entityIterator();
     while (iter.next()) |entity| {
         const grid_pos = reg.getConst(comp.GridPosition, entity);
-        const screen_pos = state.map.coordToPosition(m.Vec2_i32.new(grid_pos.x, grid_pos.y));
+        const screen_pos = state.map.coordToPosition(grid_pos.toVec2_i32());
         systems.drawShape(
             comp.Position.new(screen_pos.x(), screen_pos.y()),
             comp.Shape.rectangle(tile_size, tile_size),
@@ -560,7 +566,7 @@ fn debugDrawEnemyTarget(state: *State) void {
         const visual = reg.getConst(comp.Visual, entity);
         const offset = m.Vec2.new(state.map.tile_size / 2, state.map.tile_size / 2);
         const current_pos = state.map.coordToPosition(grid_pos.toVec2_i32()).add(offset);
-        const target_pos = state.map.coordToPosition(enemy.target_coord).add(offset);
+        const target_pos = state.map.coordToPosition(state.map.clampCoord(enemy.target_coord)).add(offset);
         rl.drawLineEx(
             .{ .x = current_pos.x(), .y = current_pos.y() },
             .{ .x = target_pos.x(), .y = target_pos.y() },

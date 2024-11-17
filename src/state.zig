@@ -18,6 +18,8 @@ pub const State = struct {
     score: u32,
     lives: u8,
     pallets_eaten: u32,
+    enemy_state_cooldown: comp.Cooldown,
+    enemy_state: comp.EnemyState,
 
     pub fn new(
         app: *application.Application,
@@ -34,6 +36,8 @@ pub const State = struct {
             .score = 0,
             .lives = 3,
             .pallets_eaten = 0,
+            .enemy_state_cooldown = comp.Cooldown.new(7),
+            .enemy_state = .scatter,
         };
     }
 };
