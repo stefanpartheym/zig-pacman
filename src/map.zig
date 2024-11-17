@@ -1,7 +1,6 @@
 const std = @import("std");
 const entt = @import("entt");
 const m = @import("math");
-const DirectedGraph = @import("utils/graph.zig").DirectedGraph;
 
 pub const MapTileType = enum {
     const Self = @This();
@@ -16,17 +15,6 @@ pub const MapTileType = enum {
         return self == .space or self == .exclusive or self == .door;
     }
 };
-
-const MapGraphContext = struct {
-    const Self = @This();
-    pub fn hash(_: Self, key: m.Vec2_i32) u64 {
-        return @as(u64, @intCast(key.x())) << 32 | @as(u64, @intCast(key.y()));
-    }
-    pub fn eql(_: Self, key1: m.Vec2_i32, key2: m.Vec2_i32) bool {
-        return key1.eql(key2);
-    }
-};
-const MapGraph = DirectedGraph(m.Vec2_i32, MapGraphContext);
 
 pub const Map = struct {
     const Self = @This();
@@ -46,48 +34,19 @@ pub const Map = struct {
     cols: i32,
     data: [MAP_ROWS][MAP_COLS]MapTileType,
     items: [MAP_ROWS][MAP_COLS]?MapItem,
-    graph: MapGraph,
     player_spawn_coord: m.Vec2_i32,
+    house_entrance_coord: m.Vec2_i32,
 
-    pub fn init(allocator: std.mem.Allocator, tile_size: f32) Self {
+    pub fn new(tile_size: f32) Self {
         return Self{
             .tile_size = tile_size,
             .rows = MAP_ROWS,
             .cols = MAP_COLS,
             .data = MAP_DEFAULT_DATA,
             .items = undefined,
-            .graph = MapGraph.init(allocator),
             .player_spawn_coord = m.Vec2_i32.new(10, 20),
+            .house_entrance_coord = m.Vec2_i32.new(10, 10),
         };
-    }
-
-    pub fn deinit(self: *Self) void {
-        self.graph.deinit();
-    }
-
-    pub fn setup(self: *Self) !void {
-        for (self.data, 0..) |row, index_y| {
-            const y: i32 = @intCast(index_y);
-            for (row, 0..) |tile, index_x| {
-                if (tile.isWalkable()) {
-                    const x: i32 = @intCast(index_x);
-                    const current = m.Vec2_i32.new(x, y);
-                    // Add current tile to to the graph and add edges to
-                    // adjacent tiles.
-                    try self.graph.add(current);
-                    const previous_x = m.Vec2_i32.new(x - 1, y);
-                    if (x > 0 and self.graph.contains(previous_x)) {
-                        try self.graph.addEdge(previous_x, current, 1);
-                        try self.graph.addEdge(current, previous_x, 1);
-                    }
-                    const previous_y = m.Vec2_i32.new(x, y - 1);
-                    if (y > 0 and self.graph.contains(previous_y)) {
-                        try self.graph.addEdge(previous_y, current, 1);
-                        try self.graph.addEdge(current, previous_y, 1);
-                    }
-                }
-            }
-        }
     }
 
     pub fn getItem(self: *Self, coord: m.Vec2_i32) ?MapItem {
@@ -116,6 +75,8 @@ pub const Map = struct {
         );
     }
 
+    /// Handles overflowing coordinates and changes them to their opposite value
+    /// based on which side they would leave the map.
     pub fn sanitizeCoord(self: *const Self, coord: m.Vec2_i32) m.Vec2_i32 {
         const max_x = self.cols - 1;
         const max_y = self.rows - 1;
@@ -126,8 +87,23 @@ pub const Map = struct {
         return m.Vec2_i32.new(x, y);
     }
 
+    /// Makes sure, coordinates stay within the map.
+    /// In contrast to `sanatizeCoord`, it does not flip coordinates.
+    pub fn clampCoord(self: *const Self, coord: m.Vec2_i32) m.Vec2_i32 {
+        return m.Vec2_i32.new(
+            std.math.clamp(coord.x(), 0, self.cols - 1),
+            std.math.clamp(coord.y(), 0, self.rows - 1),
+        );
+    }
+
     pub fn getTile(self: *const Self, coord: m.Vec2_i32) MapTileType {
         return self.data[@intCast(coord.y())][@intCast(coord.x())];
+    }
+
+    /// FIXME: Coordinates or map sized must be adjusted.
+    pub fn isRedZone(self: *const Self, coord: m.Vec2_i32) bool {
+        _ = self;
+        return (coord.x() >= 11) and (coord.x() <= 16) and ((coord.y() == 14) or (coord.y() == 26));
     }
 };
 

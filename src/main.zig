@@ -36,28 +36,28 @@ pub fn main() !void {
     app.start();
     defer app.stop();
 
-    var map = Map.init(paa.allocator(), 22);
-    defer map.deinit();
-    try map.setup();
-
+    var map = Map.new(22);
     var state = State.new(&app, &reg, &map);
 
     // Setup entities
     state.player = setupPlayer(&state);
-    state.enemies[0] = setupEnemy(&state, .blinky, m.Vec2_i32.new(10, 10));
-    state.enemies[1] = setupEnemy(&state, .inky, m.Vec2_i32.new(9, 12));
-    state.enemies[2] = setupEnemy(&state, .pinky, m.Vec2_i32.new(10, 12));
-    state.enemies[3] = setupEnemy(&state, .clyde, m.Vec2_i32.new(11, 12));
+    state.enemies[0] = setupEnemy(&state, .blinky, .scatter, m.Vec2_i32.new(10, 10));
+    state.enemies[1] = setupEnemy(&state, .inky, .house, m.Vec2_i32.new(9, 12));
+    state.enemies[2] = setupEnemy(&state, .pinky, .house, m.Vec2_i32.new(10, 12));
+    state.enemies[3] = setupEnemy(&state, .clyde, .house, m.Vec2_i32.new(11, 12));
     setupMap(&state);
 
     const deubg_color = rl.Color.yellow.alpha(0.5);
 
     while (state.app.isRunning()) {
+        const time = rl.getTime();
         const delta_time = rl.getFrameTime();
 
         handleAppInput(&state);
         handlePlayerInput(&state);
-        try updateEnemies(paa.allocator(), &state);
+        updateEnemyState(&state, time);
+        updateEnemyTarget(&state);
+        updateEnemies(&state);
         updateDirection(&state);
 
         move(&state, delta_time);
@@ -68,8 +68,7 @@ pub fn main() !void {
         try drawHud(&state);
         if (state.app.debug_mode) {
             debugDrawGridPositions(&state, deubg_color);
-            try debugDrawMapGraph(state.map, rl.Color.red);
-            try debugDrawEnemyPath(paa.allocator(), &state);
+            debugDrawEnemyTarget(&state);
             systems.drawDebug(state.reg, deubg_color);
         }
         systems.endFrame();
@@ -175,7 +174,12 @@ fn setupPlayer(state: *State) entt.Entity {
     return e;
 }
 
-fn setupEnemy(state: *State, enemy_type: comp.EnemyType, spawn_coord: m.Vec2_i32) entt.Entity {
+fn setupEnemy(
+    state: *State,
+    enemy_type: comp.EnemyType,
+    enemy_state: comp.EnemyState,
+    spawn_coord: m.Vec2_i32,
+) entt.Entity {
     const position = state.map.coordToPosition(spawn_coord);
     const color = switch (enemy_type) {
         .blinky => rl.Color.red,
@@ -190,9 +194,10 @@ fn setupEnemy(state: *State, enemy_type: comp.EnemyType, spawn_coord: m.Vec2_i32
         comp.Visual.color(color, false),
         comp.VisualLayer.new(3),
     );
+    state.reg.add(e, comp.Movement.new(.none));
     state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
     state.reg.add(e, comp.Speed.uniform(100));
-    state.reg.add(e, comp.Enemy.new(enemy_type));
+    state.reg.add(e, comp.Enemy.new(enemy_type, enemy_state, spawn_coord));
     return e;
 }
 
@@ -207,23 +212,11 @@ pub fn updateScore(state: *State, item_type: Map.MapItemType) void {
         .power_pallet => 100,
     };
     state.score += value;
-
-    switch (state.pallets_eaten) {
-        // Make the first enemy move after the player consumes the first pallet.
-        1 => state.reg.add(state.enemies[0], comp.Movement.new(.none)),
-        // Release the other enemies after the player consumed 20 pallets.
-        20 => {
-            for (state.enemies[1..]) |e| {
-                state.reg.add(e, comp.Movement.new(.none));
-            }
-        },
-        else => {},
-    }
 }
 
 fn updateDirection(state: *State) void {
     const reg = state.reg;
-    var view = reg.view(.{ comp.Movement, comp.Position, comp.GridPosition }, .{});
+    var view = reg.view(.{ comp.Movement, comp.Position, comp.GridPosition }, .{comp.Enemy});
     var iter = view.entityIterator();
     while (iter.next()) |entity| {
         const grid_position = reg.getConst(comp.GridPosition, entity);
@@ -237,30 +230,169 @@ fn updateDirection(state: *State) void {
     }
 }
 
-fn updateEnemies(allocator: std.mem.Allocator, state: *State) !void {
+fn updateEnemyState(state: *State, time: f64) void {
+    const reg = state.reg;
+    var view = state.reg.view(.{ comp.Enemy, comp.GridPosition, comp.Movement }, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        var enemy = reg.get(comp.Enemy, entity);
+        const grid_pos = reg.getConst(comp.GridPosition, entity);
+        var new_state = enemy.state;
+        switch (enemy.state) {
+            .house => {
+                if (time > 4) {
+                    new_state = .leave_house;
+                } else {
+                    const pallet_limit: u32 = switch (enemy.type) {
+                        .blinky => 0,
+                        .pinky => 7,
+                        .inky => 17,
+                        .clyde => 32,
+                    };
+                    if (state.pallets_eaten == pallet_limit) {
+                        new_state = .leave_house;
+                    }
+                }
+            },
+            .leave_house => {
+                if (grid_pos.y == state.map.house_entrance_coord.y()) {
+                    new_state = .scatter;
+                }
+            },
+            else => {
+                if (time < 7) {
+                    new_state = .scatter;
+                } else if (time < 27) {
+                    new_state = .chase;
+                } else if (time < 34) {
+                    new_state = .scatter;
+                } else if (time < 54) {
+                    new_state = .chase;
+                } else if (time < 59) {
+                    new_state = .scatter;
+                } else if (time < 79) {
+                    new_state = .chase;
+                } else if (time < 84) {
+                    new_state = .scatter;
+                } else {
+                    new_state = .chase;
+                }
+            },
+        }
+
+        var movement = reg.get(comp.Movement, entity);
+        // Handle state transitions.
+        if (new_state != enemy.state) {
+            switch (enemy.state) {
+                .leave_house => {
+                    // After leaving the house, head to the left.
+                    movement.direction = .left;
+                    movement.next_direction = .left;
+                },
+                .scatter, .chase => {
+                    // Any transition from scatter and chase mode causes a
+                    // reversal of direction.
+                    movement.next_direction = movement.direction.reverse();
+                },
+                else => {},
+            }
+            enemy.state = new_state;
+        }
+    }
+}
+
+fn updateEnemyTarget(state: *State) void {
+    const reg = state.reg;
+    const player_grid_pos = reg.getConst(comp.GridPosition, state.player);
+    const player_movement = reg.getConst(comp.Movement, state.player);
+    const player_coord = m.Vec2_i32.new(player_grid_pos.x, player_grid_pos.y);
+    const player_dir_vec = player_movement.direction.toVec2().cast(i32);
+    var view = state.reg.view(.{comp.Enemy}, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        var enemy = reg.get(comp.Enemy, entity);
+        switch (enemy.state) {
+            .scatter => enemy.target_coord = getEnemeyScatterTarget(enemy.type),
+            .chase => {
+                switch (enemy.type) {
+                    .blinky => enemy.target_coord = player_coord,
+                    .pinky => enemy.target_coord = player_coord.add(m.Vec2_i32.new(4, 4)),
+                    .inky => {
+                        const blinky_grid_pos = reg.getConst(comp.GridPosition, state.enemies[0]);
+                        const blinky_pos = blinky_grid_pos.toVec2_i32();
+                        const d = player_coord.add(m.Vec2_i32.new(2, 2).mul(player_dir_vec)).sub(blinky_pos);
+                        enemy.target_coord = blinky_pos.add(d.mul(m.Vec2_i32.new(2, 2)));
+                    },
+                    .clyde => {
+                        const grid_pos = reg.getConst(comp.GridPosition, entity);
+                        if (grid_pos.toVec2_i32().cast(f32).distance(player_coord.cast(f32)) > 8) {
+                            enemy.target_coord = player_coord;
+                        } else {
+                            enemy.target_coord = getEnemeyScatterTarget(.clyde);
+                        }
+                    },
+                }
+            },
+            .leave_house => {
+                enemy.target_coord = state.map.house_entrance_coord;
+            },
+            else => {},
+        }
+    }
+}
+
+fn getEnemeyScatterTarget(enemy_type: comp.EnemyType) m.Vec2_i32 {
+    return switch (enemy_type) {
+        .blinky => m.Vec2_i32.new(20, 0),
+        .pinky => m.Vec2_i32.new(2, 0),
+        .inky => m.Vec2_i32.new(20, 26),
+        .clyde => m.Vec2_i32.new(0, 26),
+    };
+}
+
+fn updateEnemies(state: *State) void {
+    var reg = state.reg;
     var view = state.reg.view(.{ comp.Enemy, comp.Movement, comp.Position, comp.GridPosition }, .{});
     var iter = view.entityIterator();
     while (iter.next()) |entity| {
-        const movement = state.reg.get(comp.Movement, entity);
-        const path = try getEnemyTargetPath(allocator, state, entity);
-        defer allocator.free(path);
-
-        if (path.len > 1) {
-            // Skip first element in path, as it is the current position of the
-            // entity.
-            var next_pos = path[1];
-            const offset = next_pos.sub(path[0]);
-            if (offset.x() > 0) {
-                movement.next_direction = .right;
-            } else if (offset.x() < 0) {
-                movement.next_direction = .left;
-            } else if (offset.y() > 0) {
-                movement.next_direction = .down;
-            } else if (offset.y() < 0) {
-                movement.next_direction = .up;
-            }
-        } else {
+        const enemy = reg.getConst(comp.Enemy, entity);
+        const grid_pos = reg.getConst(comp.GridPosition, entity);
+        const position = reg.getConst(comp.Position, entity);
+        var movement = reg.get(comp.Movement, entity);
+        if (grid_pos.toVec2_i32().eql(enemy.target_coord)) {
+            movement.direction = .none;
             movement.next_direction = .none;
+        } else if (canChangeDirection(state.map, position)) {
+            movement.direction = if (movement.next_direction == .none)
+                movement.direction
+            else
+                movement.next_direction;
+
+            // Determine next direction
+            const direction_vec = movement.direction.toVec2().cast(i32);
+            const lookahead_coord = grid_pos.toVec2_i32().add(direction_vec);
+            const directions = [_]comp.Direction{ .up, .down, .left, .right };
+            var min_dist: i32 = std.math.maxInt(i32);
+            for (directions) |new_direction| {
+                // Make sure, enemy cannot change direction to the exact
+                // opposite of the current direction.
+                if (new_direction.reverse() == movement.direction) {
+                    continue;
+                }
+                // Check for red zone, where enemies are not allowed to move up.
+                if (state.map.isRedZone(lookahead_coord) and (new_direction == .up)) {
+                    continue;
+                }
+                const test_coord = state.map.clampCoord(lookahead_coord.add(new_direction.toVec2().cast(i32)));
+                const target_tile = state.map.getTile(test_coord);
+                if (target_tile.isWalkable() and (target_tile != .door or enemy.state == .leave_house)) {
+                    const current_dist: i32 = @intFromFloat(test_coord.cast(f32).distance(enemy.target_coord.cast(f32)));
+                    if (current_dist < min_dist) {
+                        min_dist = current_dist;
+                        movement.next_direction = new_direction;
+                    }
+                }
+            }
         }
     }
 }
@@ -354,62 +486,6 @@ fn moveEntity(state: *State, delta_time: f32, entity: entt.Entity) void {
 // Utitlity
 //------------------------------------------------------------------------------
 
-fn getCoordAheadOf(
-    state: *State,
-    ref_coord: m.Vec2_i32,
-    ref_movement: comp.Movement,
-    tiles: i32,
-) m.Vec2_i32 {
-    const directions = [2]m.Vec2_i32{
-        ref_movement.direction.toVec2().cast(i32),
-        ref_movement.next_direction.toVec2().cast(i32),
-    };
-    var direction_idx: usize = 0;
-    var current_target = ref_coord;
-    var i: usize = 0;
-    while (i < tiles) {
-        const new_target_pos = state.map.sanitizeCoord(
-            current_target.add(directions[direction_idx]),
-        );
-        if (state.map.graph.contains(new_target_pos)) {
-            current_target = new_target_pos;
-            i += 1;
-        } else if (direction_idx < directions.len - 1) {
-            direction_idx += 1;
-        } else {
-            break;
-        }
-    }
-    return current_target;
-}
-
-fn getEnemyTargetPath(allocator: std.mem.Allocator, state: *State, entity: entt.Entity) ![]m.Vec2_i32 {
-    const player_grid_position = state.reg.getConst(comp.GridPosition, state.player);
-    const player_coord = m.Vec2_i32.new(player_grid_position.x, player_grid_position.y);
-    const player_movement = state.reg.getConst(comp.Movement, state.player);
-
-    const enemy = state.reg.getConst(comp.Enemy, entity);
-    const grid_position = state.reg.getConst(comp.GridPosition, entity);
-    const current_coord = m.Vec2_i32.new(grid_position.x, grid_position.y);
-
-    const target_coord =
-        switch (enemy.type) {
-        // Ghost pinky tries to get 4 tiles ahead of the player.
-        .pinky => getCoordAheadOf(state, player_coord, player_movement, 4),
-        .inky => getCoordAheadOf(state, player_coord, player_movement, 2),
-        else => player_coord,
-    };
-
-    return try graph.dijkstra(
-        m.Vec2_i32,
-        @TypeOf(state.map.graph.ctx),
-        allocator,
-        &state.map.graph,
-        current_coord,
-        target_coord,
-    );
-}
-
 fn canChangeDirection(map: *Map, position: comp.Position) bool {
     const pos = m.Vec2.new(position.x, position.y);
     const coord = map.positionToCoord(pos);
@@ -474,53 +550,27 @@ fn debugDrawGridPositions(state: *State, color: rl.Color) void {
     }
 }
 
-fn debugDrawMapGraph(map: *Map, color: rl.Color) !void {
-    var it = map.graph.adjOut.iterator();
-    while (it.next()) |entry| {
-        const source_hash = entry.key_ptr.*;
-        const targets: std.hash_map.AutoHashMap(u64, u64) = entry.value_ptr.*;
-        if (map.graph.lookup(source_hash)) |source| {
-            const pos = map.coordToPosition(source).add(m.Vec2.new(map.tile_size / 2, map.tile_size / 2));
-            systems.drawShape(comp.Position.new(pos.x(), pos.y()), comp.Shape.circle(5), color, true);
-            var targets_it = targets.iterator();
-            while (targets_it.next()) |target_entry| {
-                if (map.graph.lookup(target_entry.key_ptr.*)) |target| {
-                    const target_pos = map.coordToPosition(target).add(m.Vec2.new(map.tile_size / 2, map.tile_size / 2));
-                    rl.drawLine(
-                        @intFromFloat(pos.x()),
-                        @intFromFloat(pos.y()),
-                        @intFromFloat(target_pos.x()),
-                        @intFromFloat(target_pos.y()),
-                        color,
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn debugDrawEnemyPath(allocator: std.mem.Allocator, state: *State) !void {
+fn debugDrawEnemyTarget(state: *State) void {
     const reg = state.reg;
-    var view = reg.view(.{ comp.Enemy, comp.GridPosition }, .{});
+    var view = reg.view(.{ comp.Enemy, comp.GridPosition, comp.Visual }, .{});
     var iter = view.entityIterator();
     while (iter.next()) |entity| {
+        const enemy = reg.getConst(comp.Enemy, entity);
+        const grid_pos = reg.getConst(comp.GridPosition, entity);
         const visual = reg.getConst(comp.Visual, entity);
-        const path = try getEnemyTargetPath(allocator, state, entity);
-        defer allocator.free(path);
-        var previous_coord: ?m.Vec2_i32 = null;
-        for (path) |coord| {
-            if (previous_coord) |prev_coord| {
-                const offset = m.Vec2.new(state.map.tile_size / 2, state.map.tile_size / 2);
-                const previous_pos = state.map.coordToPosition(prev_coord).add(offset);
-                const current_pos = state.map.coordToPosition(coord).add(offset);
-                rl.drawLineEx(
-                    .{ .x = previous_pos.x(), .y = previous_pos.y() },
-                    .{ .x = current_pos.x(), .y = current_pos.y() },
-                    3,
-                    visual.color.value,
-                );
-            }
-            previous_coord = coord;
-        }
+        const offset = m.Vec2.new(state.map.tile_size / 2, state.map.tile_size / 2);
+        const current_pos = state.map.coordToPosition(grid_pos.toVec2_i32()).add(offset);
+        const target_pos = state.map.coordToPosition(enemy.target_coord).add(offset);
+        rl.drawLineEx(
+            .{ .x = current_pos.x(), .y = current_pos.y() },
+            .{ .x = target_pos.x(), .y = target_pos.y() },
+            3,
+            visual.color.value,
+        );
+        // rl.drawRectangleV(
+        //     .{ .x = target_pos_nooffset.x(), .y = target_pos_nooffset.y() },
+        //     .{ .x = state.map.tile_size, .y = state.map.tile_size },
+        //     visual.color.value.fade(0.5),
+        // );
     }
 }

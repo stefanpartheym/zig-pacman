@@ -9,7 +9,6 @@ pub fn build(b: *std.Build) void {
     // Dependencies
     const zalgebra_dep = b.dependency("zalgebra", options);
     const zalgebra_mod = zalgebra_dep.module("zalgebra");
-    const zig_graph_dep = b.dependency("zig-graph", options);
     const entt_dep = b.dependency("entt", options);
     const raylib_dep = b.dependency("raylib-zig", options);
 
@@ -34,7 +33,6 @@ pub fn build(b: *std.Build) void {
     // HACK: Add `zalgebra` module to executable explicitly for zls to provide
     // code completion for zalgebra.
     exe.root_module.addImport("zalgebra", zalgebra_mod);
-    exe.root_module.addImport("zig-graph", zig_graph_dep.module("zig-graph"));
     exe.root_module.addImport("entt", entt_dep.module("zig-ecs"));
     exe.root_module.addImport("raylib", raylib_dep.module("raylib"));
     exe.linkLibrary(raylib_dep.artifact("raylib"));

@@ -61,6 +61,16 @@ pub const Direction = enum {
             .none => m.Vec2.zero(),
         };
     }
+
+    pub fn reverse(self: Self) Direction {
+        return switch (self) {
+            .up => .down,
+            .down => .up,
+            .left => .right,
+            .right => .left,
+            .none => .none,
+        };
+    }
 };
 
 pub const Movement = struct {
@@ -290,6 +300,10 @@ pub const GridPosition = struct {
             .y = y,
         };
     }
+
+    pub fn toVec2_i32(self: *const Self) m.Vec2_i32 {
+        return m.Vec2_i32.new(self.x, self.y);
+    }
 };
 
 pub const EnemyType = enum {
@@ -299,12 +313,29 @@ pub const EnemyType = enum {
     clyde,
 };
 
+pub const EnemyState = enum {
+    none,
+    chase,
+    scatter,
+    house,
+    leave_house,
+    // frightened,
+    // eyes,
+    // enter_house,
+};
+
 pub const Enemy = struct {
     const Self = @This();
 
     type: EnemyType,
+    state: EnemyState,
+    target_coord: m.Vec2_i32,
 
-    pub fn new(enemy_type: EnemyType) Self {
-        return Self{ .type = enemy_type };
+    pub fn new(enemy_type: EnemyType, state: EnemyState, target_coord: m.Vec2_i32) Self {
+        return Self{
+            .type = enemy_type,
+            .state = state,
+            .target_coord = target_coord,
+        };
     }
 };
