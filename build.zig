@@ -11,12 +11,14 @@ pub fn build(b: *std.Build) void {
     const zalgebra_mod = zalgebra_dep.module("zalgebra");
     const entt_dep = b.dependency("entt", options);
     const raylib_dep = b.dependency("raylib-zig", options);
+    const raylib_mod = raylib_dep.module("raylib");
 
     // Internal Modules
     const math_mod = b.createModule(.{ .root_source_file = b.path("src/math/main.zig") });
     math_mod.addImport("zalgebra", zalgebra_mod);
     const graphics_mod = b.createModule(.{ .root_source_file = b.path("src/graphics/main.zig") });
     graphics_mod.addImport("math", math_mod);
+    graphics_mod.addImport("raylib", raylib_mod);
 
     const exe = b.addExecutable(.{
         .name = "zig-pacman",
@@ -34,7 +36,7 @@ pub fn build(b: *std.Build) void {
     // code completion for zalgebra.
     exe.root_module.addImport("zalgebra", zalgebra_mod);
     exe.root_module.addImport("entt", entt_dep.module("zig-ecs"));
-    exe.root_module.addImport("raylib", raylib_dep.module("raylib"));
+    exe.root_module.addImport("raylib", raylib_mod);
     exe.linkLibrary(raylib_dep.artifact("raylib"));
 
     // Declare executable tests.

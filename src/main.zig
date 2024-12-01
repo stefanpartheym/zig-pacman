@@ -7,10 +7,10 @@ const Paa = @import("paa.zig");
 const Application = @import("application.zig").Application;
 const State = @import("state.zig").State;
 const Map = @import("map.zig").Map;
-const graph = @import("utils/graph.zig");
 const comp = @import("components.zig");
 const systems = @import("systems.zig");
 const entities = @import("entities.zig");
+const grahpics = @import("graphics");
 
 pub fn main() !void {
     var paa = Paa.init();
@@ -38,7 +38,6 @@ pub fn main() !void {
 
     var map = Map.new(22);
     var state = State.new(&app, &reg, &map);
-    state.enemy_state_cooldown.reset();
 
     // Setup entities
     state.player = setupPlayer(&state);
@@ -46,7 +45,8 @@ pub fn main() !void {
     state.enemies[1] = setupEnemy(&state, .inky, .house, m.Vec2_i32.new(9, 12));
     state.enemies[2] = setupEnemy(&state, .pinky, .house, m.Vec2_i32.new(10, 12));
     state.enemies[3] = setupEnemy(&state, .clyde, .house, m.Vec2_i32.new(11, 12));
-    setupMap(&state);
+
+    reset(&state, true);
 
     const deubg_color = rl.Color.yellow.alpha(0.5);
 
@@ -55,25 +55,83 @@ pub fn main() !void {
 
         handleAppInput(&state);
 
-        handlePlayerInput(&state);
-        updatePlayerDirection(&state);
+        if (state.isPlaying()) {
+            handlePlayerInput(&state);
+            updatePlayerDirection(&state);
 
-        updateEnemyState(&state, delta_time);
-        updateEnemyTarget(&state);
-        updateEnemies(&state);
+            updateEnemyState(&state, delta_time);
+            updateEnemyTarget(&state);
+            updateEnemies(&state);
 
-        move(&state, delta_time);
-        playerPickupItem(&state);
+            move(&state, delta_time);
+        }
 
         systems.beginFrame(null);
         systems.draw(state.reg);
-        try drawHud(&state);
+        try drawUi(&state);
         if (state.app.debug_mode) {
             debugDrawGridPositions(&state, deubg_color);
             debugDrawEnemyTarget(&state);
             systems.drawDebug(state.reg, deubg_color);
         }
         systems.endFrame();
+
+        if (state.isPlaying()) {
+            handleCollision(&state);
+            playerPickupItem(&state);
+        }
+    }
+}
+
+//------------------------------------------------------------------------------
+// Game
+//------------------------------------------------------------------------------
+
+fn reset(state: *State, map: bool) void {
+    const reg = state.reg;
+
+    // Setup player
+    {
+        const spawn_coord = state.map.player_spawn_coord;
+        const spawn_pos = state.map.coordToPosition(spawn_coord);
+        var pos = reg.get(comp.Position, state.player);
+        pos.x = spawn_pos.x();
+        pos.y = spawn_pos.y();
+        var grid_pos = reg.get(comp.GridPosition, state.player);
+        grid_pos.x = spawn_coord.x();
+        grid_pos.y = spawn_coord.y();
+    }
+
+    // Setup enemies
+    {
+        const EnemyData = struct {
+            type: comp.EnemyType,
+            state: comp.EnemyState,
+            spawn_coord: m.Vec2_i32,
+        };
+        const data = [4]EnemyData{
+            .{ .type = .blinky, .state = .scatter, .spawn_coord = m.Vec2_i32.new(10, 10) },
+            .{ .type = .inky, .state = .house, .spawn_coord = m.Vec2_i32.new(9, 12) },
+            .{ .type = .pinky, .state = .house, .spawn_coord = m.Vec2_i32.new(10, 12) },
+            .{ .type = .clyde, .state = .house, .spawn_coord = m.Vec2_i32.new(11, 12) },
+        };
+        for (state.enemies, 0..) |entity, i| {
+            var enemy = reg.get(comp.Enemy, entity);
+            enemy.type = data[i].type;
+            enemy.state = data[i].state;
+            const spawn_coord = data[i].spawn_coord;
+            const spawn_pos = state.map.coordToPosition(spawn_coord);
+            var grid_pos = reg.get(comp.GridPosition, entity);
+            grid_pos.x = spawn_coord.x();
+            grid_pos.y = spawn_coord.y();
+            var pos = reg.get(comp.Position, entity);
+            pos.x = spawn_pos.x();
+            pos.y = spawn_pos.y();
+        }
+    }
+
+    if (map) {
+        setupMap(state);
     }
 }
 
@@ -91,6 +149,22 @@ fn handleAppInput(state: *State) void {
 
     if (rl.isKeyPressed(rl.KeyboardKey.key_f1)) {
         state.app.toggleDebugMode();
+    }
+
+    if (rl.isKeyPressed(rl.KeyboardKey.key_enter)) {
+        switch (state.status) {
+            .playing => state.pause(),
+            .ready => {
+                state.enemy_state_cooldown.resets = 0;
+                state.enemy_state_cooldown.reset();
+                state.start();
+            },
+            .paused => state.start(),
+            .lost, .won, .gameover => {
+                reset(state, state.status != .lost);
+                state.start();
+            },
+        }
     }
 }
 
@@ -113,29 +187,33 @@ fn handlePlayerInput(state: *State) void {
 //------------------------------------------------------------------------------
 
 fn setupMap(state: *State) void {
+    state.max_pallets = 0;
     const tile_size = state.map.tile_size;
     for (state.map.data, 0..) |tiles, row| {
         for (tiles, 0..) |tile, col| {
-            const visual = switch (tile) {
-                .wall => comp.Visual.color(rl.Color.blue, false),
-                .space, .blank, .exclusive => comp.Visual.color(rl.Color.black, false),
-                .door => comp.Visual.color(rl.Color.ray_white, false),
-            };
             const coord = m.Vec2_i32.new(@intCast(col), @intCast(row));
-            const pos = state.map.coordToPosition(coord);
-            _ = entities.createRenderable(
-                state.reg,
-                comp.Position{ .x = pos.x(), .y = pos.y() },
-                comp.Shape.rectangle(tile_size, tile_size),
-                visual,
-                null,
-            );
+            if (state.map.getItem(coord) == null) {
+                const visual = switch (tile) {
+                    .wall => comp.Visual.color(rl.Color.blue, false),
+                    .space, .blank, .exclusive => comp.Visual.color(rl.Color.black, false),
+                    .door => comp.Visual.color(rl.Color.ray_white, false),
+                };
+                const pos = state.map.coordToPosition(coord);
+                _ = entities.createRenderable(
+                    state.reg,
+                    comp.Position{ .x = pos.x(), .y = pos.y() },
+                    comp.Shape.rectangle(tile_size, tile_size),
+                    visual,
+                    null,
+                );
 
-            // Setup items for each tile, that are walkably by the player.
-            if (tile == .space and !coord.eql(state.map.player_spawn_coord)) {
-                state.map.setItem(coord, setupItem(state, coord, .pallet));
-            } else {
-                state.map.setItem(coord, null);
+                // Setup items for each tile, that are walkably by the player.
+                if (tile == .space and !coord.eql(state.map.player_spawn_coord)) {
+                    state.map.setItem(coord, setupItem(state, coord, .pallet));
+                    state.max_pallets += 1;
+                } else {
+                    state.map.setItem(coord, null);
+                }
             }
         }
     }
@@ -208,12 +286,15 @@ fn setupEnemy(
 //------------------------------------------------------------------------------
 
 pub fn updateScore(state: *State, item_type: Map.MapItemType) void {
-    state.pallets_eaten += 1;
     const value: u32 = switch (item_type) {
         .pallet => 10,
         .power_pallet => 100,
     };
     state.score += value;
+    state.pallets_eaten += 1;
+    if (state.pallets_eaten == state.max_pallets) {
+        state.win();
+    }
 }
 
 fn updatePlayerDirection(state: *State) void {
@@ -403,6 +484,32 @@ fn updateEnemies(state: *State) void {
     }
 }
 
+/// Handle player colliding with enemies.
+fn handleCollision(state: *State) void {
+    const size = state.map.tile_size;
+    const player_pos = state.reg.get(comp.Position, state.player);
+    const player_rect = rl.Rectangle{
+        .x = player_pos.x,
+        .y = player_pos.y,
+        .width = size,
+        .height = size,
+    };
+    var view = state.reg.view(.{ comp.Enemy, comp.Position }, .{});
+    var iter = view.entityIterator();
+    while (iter.next()) |entity| {
+        const enemy_pos = state.reg.get(comp.Position, entity);
+        const enemy_rect = rl.Rectangle{
+            .x = enemy_pos.x,
+            .y = enemy_pos.y,
+            .width = size,
+            .height = size,
+        };
+        if (rl.checkCollisionRecs(player_rect, enemy_rect)) {
+            state.loose();
+        }
+    }
+}
+
 fn playerPickupItem(state: *State) void {
     const grid_position = state.reg.get(comp.GridPosition, state.player);
     const coord = grid_position.toVec2_i32();
@@ -511,7 +618,7 @@ fn canMove(state: *State, grid_position: comp.GridPosition, direction: comp.Dire
 // Drawing
 //------------------------------------------------------------------------------
 
-fn drawHud(state: *State) !void {
+fn drawUi(state: *State) !void {
     const color = rl.Color.ray_white;
     const size = 24;
     const tile_size: i32 = @intFromFloat(state.map.tile_size);
@@ -536,6 +643,56 @@ fn drawHud(state: *State) !void {
         size,
         color,
     );
+
+    const offset_y_mid = @as(i32, @intCast(@divTrunc(state.config.display.height, 2))) - size;
+    switch (state.status) {
+        .ready => {
+            rl.drawText(
+                "Press [ENTER] to start",
+                offset_x,
+                offset_y_mid,
+                size,
+                color,
+            );
+        },
+        .paused => {
+            rl.drawText(
+                "Press [ENTER] to resume",
+                offset_x,
+                offset_y_mid,
+                size,
+                color,
+            );
+        },
+        .lost => {
+            rl.drawText(
+                "You lost!\nPress [ENTER] to start",
+                offset_x,
+                offset_y_mid,
+                size,
+                color,
+            );
+        },
+        .gameover => {
+            rl.drawText(
+                "GAME OVER!\nPress [ENTER] to restart",
+                offset_x,
+                offset_y_mid,
+                size,
+                color,
+            );
+        },
+        .won => {
+            rl.drawText(
+                "You won!\nPress [ENTER] to restart",
+                offset_x,
+                offset_y_mid,
+                size,
+                color,
+            );
+        },
+        else => {},
+    }
 }
 
 /// Draws an entities grid positions in debug mode.

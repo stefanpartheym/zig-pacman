@@ -7,7 +7,7 @@ pub fn drawTextCentered(
     display_width: i32,
     display_height: i32,
 ) void {
-    const text_width: f32 = @floatFromInt(rl.measureText(text, size));
+    const text_width = rl.measureText(text, size);
     rl.drawText(
         text,
         @divTrunc(display_width, 2) - @divTrunc(text_width, 2),
