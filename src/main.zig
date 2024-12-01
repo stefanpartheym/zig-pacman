@@ -97,13 +97,13 @@ fn handleAppInput(state: *State) void {
 fn handlePlayerInput(state: *State) void {
     const movement = state.reg.get(comp.Movement, state.player);
 
-    if (rl.isKeyDown(rl.KeyboardKey.key_h)) {
+    if (rl.isKeyDown(rl.KeyboardKey.key_left) or rl.isKeyDown(rl.KeyboardKey.key_h)) {
         movement.next_direction = .left;
-    } else if (rl.isKeyDown(rl.KeyboardKey.key_l)) {
+    } else if (rl.isKeyDown(rl.KeyboardKey.key_right) or rl.isKeyDown(rl.KeyboardKey.key_l)) {
         movement.next_direction = .right;
-    } else if (rl.isKeyDown(rl.KeyboardKey.key_k)) {
+    } else if (rl.isKeyDown(rl.KeyboardKey.key_up) or rl.isKeyDown(rl.KeyboardKey.key_k)) {
         movement.next_direction = .up;
-    } else if (rl.isKeyDown(rl.KeyboardKey.key_j)) {
+    } else if (rl.isKeyDown(rl.KeyboardKey.key_down) or rl.isKeyDown(rl.KeyboardKey.key_j)) {
         movement.next_direction = .down;
     }
 }
