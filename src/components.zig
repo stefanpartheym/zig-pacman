@@ -22,6 +22,10 @@ pub const Position = struct {
         };
     }
 
+    pub fn fromVec2(value: m.Vec2) Self {
+        return new(value.x(), value.y());
+    }
+
     pub fn zero() Self {
         return Self.new(0, 0);
     }
@@ -307,6 +311,10 @@ pub const GridPosition = struct {
             .x = x,
             .y = y,
         };
+    }
+
+    pub fn fromVec2_i32(value: m.Vec2_i32) Self {
+        return new(value.x(), value.y());
     }
 
     pub fn toVec2_i32(self: *const Self) m.Vec2_i32 {

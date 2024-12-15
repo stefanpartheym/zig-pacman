@@ -3,6 +3,7 @@ const entt = @import("entt");
 const application = @import("application.zig");
 const comp = @import("components.zig");
 const Map = @import("map.zig").Map;
+const Timer = @import("timer.zig").Timer;
 
 const Status = enum {
     ready,
@@ -27,6 +28,9 @@ pub const State = struct {
     enemies: [4]entt.Entity,
     score: u32,
     lives: u8,
+    /// Tracks the time elapsed since the the player started the game.
+    /// When the player pauses the game, the timer is also paused.
+    timer: Timer,
     pallets_eaten: u32,
     max_pallets: u32,
     enemy_state_cooldown: comp.Cooldown,
@@ -47,6 +51,7 @@ pub const State = struct {
             .enemies = undefined,
             .score = 0,
             .lives = 3,
+            .timer = Timer.new(),
             .pallets_eaten = 0,
             .max_pallets = 0,
             .enemy_state_cooldown = comp.Cooldown.new(7),

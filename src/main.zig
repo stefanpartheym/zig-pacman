@@ -40,11 +40,11 @@ pub fn main() !void {
     var state = State.new(&app, &reg, &map);
 
     // Setup entities
-    state.player = setupPlayer(&state);
-    state.enemies[0] = setupEnemy(&state, .blinky, .scatter, m.Vec2_i32.new(10, 10));
-    state.enemies[1] = setupEnemy(&state, .inky, .house, m.Vec2_i32.new(9, 12));
-    state.enemies[2] = setupEnemy(&state, .pinky, .house, m.Vec2_i32.new(10, 12));
-    state.enemies[3] = setupEnemy(&state, .clyde, .house, m.Vec2_i32.new(11, 12));
+    state.player = createPlayer(&state);
+    state.enemies[0] = createEnemy(&state);
+    state.enemies[1] = createEnemy(&state);
+    state.enemies[2] = createEnemy(&state);
+    state.enemies[3] = createEnemy(&state);
 
     reset(&state, true);
 
@@ -56,6 +56,7 @@ pub fn main() !void {
         handleAppInput(&state);
 
         if (state.isPlaying()) {
+            state.timer.update(delta_time);
             handlePlayerInput(&state);
             updatePlayerDirection(&state);
 
@@ -87,19 +88,16 @@ pub fn main() !void {
 // Game
 //------------------------------------------------------------------------------
 
-fn reset(state: *State, map: bool) void {
+fn reset(state: *State, game_over: bool) void {
     const reg = state.reg;
 
     // Setup player
     {
         const spawn_coord = state.map.player_spawn_coord;
         const spawn_pos = state.map.coordToPosition(spawn_coord);
-        var pos = reg.get(comp.Position, state.player);
-        pos.x = spawn_pos.x();
-        pos.y = spawn_pos.y();
-        var grid_pos = reg.get(comp.GridPosition, state.player);
-        grid_pos.x = spawn_coord.x();
-        grid_pos.y = spawn_coord.y();
+        reg.replace(state.player, comp.Position.fromVec2(spawn_pos));
+        reg.addOrReplace(state.player, comp.GridPosition.fromVec2_i32(spawn_coord));
+        reg.addOrReplace(state.player, comp.Movement.new(.none));
     }
 
     // Setup enemies
@@ -107,31 +105,29 @@ fn reset(state: *State, map: bool) void {
         const EnemyData = struct {
             type: comp.EnemyType,
             state: comp.EnemyState,
+            color: rl.Color,
             spawn_coord: m.Vec2_i32,
         };
         const data = [4]EnemyData{
-            .{ .type = .blinky, .state = .scatter, .spawn_coord = m.Vec2_i32.new(10, 10) },
-            .{ .type = .inky, .state = .house, .spawn_coord = m.Vec2_i32.new(9, 12) },
-            .{ .type = .pinky, .state = .house, .spawn_coord = m.Vec2_i32.new(10, 12) },
-            .{ .type = .clyde, .state = .house, .spawn_coord = m.Vec2_i32.new(11, 12) },
+            .{ .type = .blinky, .color = rl.Color.red, .state = .scatter, .spawn_coord = m.Vec2_i32.new(10, 10) },
+            .{ .type = .pinky, .color = rl.Color.pink, .state = .house, .spawn_coord = m.Vec2_i32.new(10, 12) },
+            .{ .type = .inky, .color = rl.Color.dark_blue, .state = .house, .spawn_coord = m.Vec2_i32.new(9, 12) },
+            .{ .type = .clyde, .color = rl.Color.orange, .state = .house, .spawn_coord = m.Vec2_i32.new(11, 12) },
         };
         for (state.enemies, 0..) |entity, i| {
-            var enemy = reg.get(comp.Enemy, entity);
-            enemy.type = data[i].type;
-            enemy.state = data[i].state;
             const spawn_coord = data[i].spawn_coord;
             const spawn_pos = state.map.coordToPosition(spawn_coord);
-            var grid_pos = reg.get(comp.GridPosition, entity);
-            grid_pos.x = spawn_coord.x();
-            grid_pos.y = spawn_coord.y();
-            var pos = reg.get(comp.Position, entity);
-            pos.x = spawn_pos.x();
-            pos.y = spawn_pos.y();
+            reg.replace(entity, comp.Visual.color(data[i].color, false));
+            reg.replace(entity, comp.Position.fromVec2(spawn_pos));
+            reg.addOrReplace(entity, comp.GridPosition.fromVec2_i32(spawn_coord));
+            reg.addOrReplace(entity, comp.Movement.new(.none));
+            reg.addOrReplace(entity, comp.Enemy.new(data[i].type, data[i].state, spawn_coord));
         }
     }
 
-    if (map) {
+    if (game_over) {
         setupMap(state);
+        state.timer.reset();
     }
 }
 
@@ -192,7 +188,8 @@ fn setupMap(state: *State) void {
     for (state.map.data, 0..) |tiles, row| {
         for (tiles, 0..) |tile, col| {
             const coord = m.Vec2_i32.new(@intCast(col), @intCast(row));
-            if (state.map.getItem(coord) == null) {
+            const item = state.map.getItem(coord);
+            if (item == null) {
                 const visual = switch (tile) {
                     .wall => comp.Visual.color(rl.Color.blue, false),
                     .space, .blank, .exclusive => comp.Visual.color(rl.Color.black, false),
@@ -214,6 +211,8 @@ fn setupMap(state: *State) void {
                 } else {
                     state.map.setItem(coord, null);
                 }
+            } else {
+                state.max_pallets += 1;
             }
         }
     }
@@ -238,46 +237,27 @@ fn setupItem(state: *State, coord: m.Vec2_i32, item_type: Map.MapItemType) Map.M
     };
 }
 
-fn setupPlayer(state: *State) entt.Entity {
-    const spawn_coord = state.map.player_spawn_coord;
-    const position = state.map.coordToPosition(spawn_coord);
+fn createPlayer(state: *State) entt.Entity {
     const e = entities.createRenderable(
         state.reg,
-        comp.Position.new(position.x(), position.y()),
+        comp.Position.zero(),
         comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
         comp.Visual.color(rl.Color.yellow, false),
         comp.VisualLayer.new(2),
     );
-    state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
-    state.reg.add(e, comp.Movement.new(.none));
     state.reg.add(e, comp.Speed.uniform(100));
     return e;
 }
 
-fn setupEnemy(
-    state: *State,
-    enemy_type: comp.EnemyType,
-    enemy_state: comp.EnemyState,
-    spawn_coord: m.Vec2_i32,
-) entt.Entity {
-    const position = state.map.coordToPosition(spawn_coord);
-    const color = switch (enemy_type) {
-        .blinky => rl.Color.red,
-        .pinky => rl.Color.pink,
-        .inky => rl.Color.dark_blue,
-        .clyde => rl.Color.orange,
-    };
+fn createEnemy(state: *State) entt.Entity {
     const e = entities.createRenderable(
         state.reg,
-        comp.Position.new(position.x(), position.y()),
+        comp.Position.zero(),
         comp.Shape.rectangle(state.map.tile_size, state.map.tile_size),
-        comp.Visual.color(color, false),
+        comp.Visual.color(rl.Color.pink, false),
         comp.VisualLayer.new(3),
     );
-    state.reg.add(e, comp.Movement.new(.none));
-    state.reg.add(e, comp.GridPosition.new(spawn_coord.x(), spawn_coord.y()));
-    state.reg.add(e, comp.Speed.uniform(100));
-    state.reg.add(e, comp.Enemy.new(enemy_type, enemy_state, spawn_coord));
+    state.reg.addOrReplace(e, comp.Speed.uniform(100));
     return e;
 }
 
@@ -343,7 +323,7 @@ fn updateEnemyState(state: *State, delta_time: f32) void {
         var new_state = enemy.state;
         switch (enemy.state) {
             .house => {
-                if (delta_time > 4) {
+                if (state.timer.state > 8) {
                     new_state = .leave_house;
                 } else {
                     const pallet_limit: u32 = switch (enemy.type) {

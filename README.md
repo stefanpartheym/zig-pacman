@@ -21,7 +21,7 @@ _source: [The 20 Games Challange #5 (Pacman)](https://20_games_challenge.gitlab.
   - [x] Each ghost has an assigned corner that it will scatter to during scatter mode.
   - For more details on the Pac-Man AI, check out this detailed breakdown. If you are using a modern game engine, then you will probably solve some problems (such as pathfinding) differently and will therefore have to improvise a little.
 - [ ] Add the “power pellet” mode. When Pac-man eats the pellet, the ghosts will turn blue (scared), and will scatter. Pac-Man can eat the ghosts. After a timer elapses, the ghosts will flash white, then return to normal. Eaten ghosts will award points, turn into eyes, and then return to the pen before coming back as regular ghosts.
-- [ ] Add the win states and lose states. Pac-Man will die when eaten by a ghost, consuming a life. When all dots are consumed, the level will reset.
+- [x] Add the win states and lose states. Pac-Man will die when eaten by a ghost, consuming a life. When all dots are consumed, the level will reset.
 
 ## Running the game
 
